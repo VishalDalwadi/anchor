@@ -40,6 +40,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newWatchCmd())
 	root.AddCommand(newRecurCmd())
 	root.AddCommand(newBriefCmd())
+	root.AddCommand(newInstallCmd())
 
 	return root
 }
