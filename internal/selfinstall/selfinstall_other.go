@@ -9,3 +9,11 @@ package selfinstall
 func addToPath(dir string) (bool, error) {
 	return false, nil
 }
+
+// setupCompletion is a no-op on non-Windows platforms for the same reason:
+// which rc file to edit (~/.bashrc, ~/.zshrc, fish config, ...) depends on
+// a shell this program can't reliably infer. The caller prints manual
+// instructions pointing at `anchor completion <shell>` instead.
+func setupCompletion() (string, error) {
+	return "", nil
+}

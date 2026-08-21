@@ -34,6 +34,15 @@ func newInstallCmd() *cobra.Command {
 			default:
 				fmt.Printf("add %s to your PATH manually (e.g. in your shell profile)\n", filepath.Dir(dst))
 			}
+
+			switch msg, err := selfinstall.SetupCompletion(); {
+			case err != nil:
+				fmt.Printf("note: could not set up shell completion: %v\n", err)
+			case msg != "":
+				fmt.Println(msg)
+			default:
+				fmt.Println("for shell completion, see: anchor completion --help")
+			}
 			return nil
 		},
 	}

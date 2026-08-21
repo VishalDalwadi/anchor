@@ -3,6 +3,10 @@
 package selfinstall
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -67,4 +71,63 @@ func broadcastEnvChange() {
 		1000,
 		uintptr(unsafe.Pointer(&result)),
 	)
+}
+
+const completionMarker = "# anchor shell completion"
+
+// setupCompletion wires `anchor completion powershell` into the user's
+// PowerShell profile so tab-completion works in every new session,
+// without needing them to source it by hand. Idempotent: does nothing if
+// the marker line is already present.
+func setupCompletion() (string, error) {
+	profilePath, err := powershellProfilePath()
+	if err != nil {
+		return "", err
+	}
+	return addCompletionLine(profilePath)
+}
+
+// addCompletionLine appends the completion-sourcing line to the profile
+// at path, unless it's already there. Split out from setupCompletion so
+// the write/idempotency logic can be tested against a throwaway file
+// instead of a real PowerShell profile.
+func addCompletionLine(profilePath string) (string, error) {
+	existing, err := os.ReadFile(profilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("reading %s: %w", profilePath, err)
+	}
+	if strings.Contains(string(existing), completionMarker) {
+		return "PowerShell completion already configured in " + profilePath, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(profilePath), 0o755); err != nil {
+		return "", fmt.Errorf("creating %s: %w", filepath.Dir(profilePath), err)
+	}
+	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", fmt.Errorf("opening %s: %w", profilePath, err)
+	}
+	defer f.Close()
+
+	line := fmt.Sprintf("\n%s\nif (Get-Command anchor -ErrorAction SilentlyContinue) { anchor completion powershell | Out-String | Invoke-Expression }\n", completionMarker)
+	if _, err := f.WriteString(line); err != nil {
+		return "", fmt.Errorf("writing %s: %w", profilePath, err)
+	}
+
+	return "added PowerShell completion to " + profilePath + " — open a new terminal for it to take effect", nil
+}
+
+// powershellProfilePath asks the live PowerShell host for $PROFILE rather
+// than guessing between the Windows PowerShell 5.1 and PowerShell 7+
+// locations, so it matches whatever the user's actual shell reads.
+func powershellProfilePath() (string, error) {
+	out, err := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-Command", "$PROFILE").Output()
+	if err != nil {
+		return "", fmt.Errorf("locating PowerShell profile: %w", err)
+	}
+	path := strings.TrimSpace(string(out))
+	if path == "" {
+		return "", fmt.Errorf("PowerShell returned an empty $PROFILE path")
+	}
+	return path, nil
 }
