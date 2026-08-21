@@ -117,6 +117,37 @@ func addCompletionLine(profilePath string) (string, error) {
 	return "added PowerShell completion to " + profilePath + " — open a new terminal for it to take effect", nil
 }
 
+// setupRecurTask registers (or replaces) a Windows Scheduled Task that
+// runs `<anchorPath> recur run` once daily, catching up if the machine
+// was asleep/off at the scheduled time. Registering a task in the current
+// user's own context (no -RunLevel Highest, no stored password) doesn't
+// require elevation.
+func setupRecurTask(anchorPath string) (string, error) {
+	script := recurTaskScript(anchorPath, RecurTaskName)
+	out, err := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-Command", script).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("registering scheduled task %s: %w: %s", RecurTaskName, err, strings.TrimSpace(string(out)))
+	}
+	return fmt.Sprintf("scheduled task %q registered to run `recur run` daily", RecurTaskName), nil
+}
+
+// recurTaskScript builds the PowerShell script that (re)registers the
+// scheduled task. Split out as a pure function so the quoting logic can
+// be unit tested without touching the real Task Scheduler.
+func recurTaskScript(anchorPath, taskName string) string {
+	return fmt.Sprintf(`$Action = New-ScheduledTaskAction -Execute %s -Argument 'recur run'
+$Trigger = New-ScheduledTaskTrigger -Daily -At 9am
+$Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
+Register-ScheduledTask -TaskName %s -Action $Action -Trigger $Trigger -Settings $Settings -Force | Out-Null`,
+		psQuote(anchorPath), psQuote(taskName))
+}
+
+// psQuote wraps s in single quotes for embedding in a PowerShell script,
+// doubling any embedded single quotes per PowerShell's escaping rule.
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
 // powershellProfilePath asks the live PowerShell host for $PROFILE rather
 // than guessing between the Windows PowerShell 5.1 and PowerShell 7+
 // locations, so it matches whatever the user's actual shell reads.

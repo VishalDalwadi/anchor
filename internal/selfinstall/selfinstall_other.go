@@ -17,3 +17,10 @@ func addToPath(dir string) (bool, error) {
 func setupCompletion() (string, error) {
 	return "", nil
 }
+
+// setupRecurTask is a no-op outside Windows: anchor-spec.md scopes
+// `recur run`'s scheduler integration to Windows Task Scheduler
+// specifically. The caller prints a manual cron suggestion instead.
+func setupRecurTask(anchorPath string) (string, error) {
+	return "", nil
+}

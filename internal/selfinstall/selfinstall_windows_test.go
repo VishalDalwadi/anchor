@@ -49,6 +49,33 @@ func TestAddCompletionLine(t *testing.T) {
 	}
 }
 
+func TestRecurTaskScript(t *testing.T) {
+	script := recurTaskScript(`C:\Users\Mando\.anchor\bin\anchor.exe`, RecurTaskName)
+
+	wantExecute := `-Execute 'C:\Users\Mando\.anchor\bin\anchor.exe'`
+	if !strings.Contains(script, wantExecute) {
+		t.Errorf("script missing quoted executable path %q:\n%s", wantExecute, script)
+	}
+	wantTaskName := `-TaskName 'AnchorRecurRun'`
+	if !strings.Contains(script, wantTaskName) {
+		t.Errorf("script missing quoted task name %q:\n%s", wantTaskName, script)
+	}
+	if !strings.Contains(script, "-Argument 'recur run'") {
+		t.Errorf("script does not pass 'recur run' as the argument:\n%s", script)
+	}
+	if !strings.Contains(script, "-Force") {
+		t.Errorf("script does not force-overwrite an existing task, so re-running install would fail:\n%s", script)
+	}
+}
+
+func TestPSQuoteEscapesEmbeddedSingleQuotes(t *testing.T) {
+	got := psQuote(`C:\Users\O'Brien\anchor.exe`)
+	want := `'C:\Users\O''Brien\anchor.exe'`
+	if got != want {
+		t.Errorf("psQuote(%q) = %q, want %q", `C:\Users\O'Brien\anchor.exe`, got, want)
+	}
+}
+
 func TestAddCompletionLinePreservesExistingContent(t *testing.T) {
 	dir := t.TempDir()
 	profile := filepath.Join(dir, "Microsoft.PowerShell_profile.ps1")

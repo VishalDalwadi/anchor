@@ -43,6 +43,15 @@ func newInstallCmd() *cobra.Command {
 			default:
 				fmt.Println("for shell completion, see: anchor completion --help")
 			}
+
+			switch msg, err := selfinstall.SetupRecurTask(dst); {
+			case err != nil:
+				fmt.Printf("note: could not schedule `recur run`: %v\n", err)
+			case msg != "":
+				fmt.Println(msg)
+			default:
+				fmt.Println("no automatic scheduler support on this platform — run `anchor recur run` periodically yourself (e.g. via cron)")
+			}
 			return nil
 		},
 	}
