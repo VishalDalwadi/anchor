@@ -68,6 +68,9 @@ func newGoalAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&parent, "parent", "", "id of the goal one tier up")
 	cmd.MarkFlagRequired("tier")
 	cmd.MarkFlagRequired("aspect")
+	registerAspectFlag(cmd)
+	registerTierFlag(cmd)
+	registerParentFlag(cmd)
 	return cmd
 }
 
@@ -92,9 +95,10 @@ func addGoal(s *store.Store, goals []model.Goal, text, aspectFlag, tier, period,
 func newGoalEditCmd() *cobra.Command {
 	var text, period, parent string
 	cmd := &cobra.Command{
-		Use:   "edit <id>",
-		Short: "Edit a goal",
-		Args:  cobra.ExactArgs(1),
+		Use:               "edit <id>",
+		Short:             "Edit a goal",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeGoalIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
@@ -126,24 +130,27 @@ func newGoalEditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&text, "text", "", "new text")
 	cmd.Flags().StringVar(&period, "period", "", "new period")
 	cmd.Flags().StringVar(&parent, "parent", "", "new parent goal id")
+	registerParentFlag(cmd)
 	return cmd
 }
 
 func newGoalDoneCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "done <id>",
-		Short: "Mark a goal done",
-		Args:  cobra.ExactArgs(1),
-		RunE:  goalSetStatus(model.GoalDone),
+		Use:               "done <id>",
+		Short:             "Mark a goal done",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeGoalIDs,
+		RunE:              goalSetStatus(model.GoalDone),
 	}
 }
 
 func newGoalDropCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "drop <id>",
-		Short: "Drop a goal",
-		Args:  cobra.ExactArgs(1),
-		RunE:  goalSetStatus(model.GoalDropped),
+		Use:               "drop <id>",
+		Short:             "Drop a goal",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeGoalIDs,
+		RunE:              goalSetStatus(model.GoalDropped),
 	}
 }
 
@@ -217,6 +224,8 @@ func newGoalListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tier, "tier", "", "filter by tier")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "filter by life aspect")
 	cmd.Flags().BoolVar(&tree, "tree", false, "print as a parent/child tree")
+	registerAspectFlag(cmd)
+	registerTierFlag(cmd)
 	return cmd
 }
 

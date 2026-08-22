@@ -69,15 +69,17 @@ func newRecurAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&context, "context", "", "context tag applied to spawned tasks")
 	cmd.MarkFlagRequired("cron")
 	cmd.MarkFlagRequired("aspect")
+	registerAspectFlag(cmd)
 	return cmd
 }
 
 func newRecurEditCmd() *cobra.Command {
 	var text, cronExpr, context string
 	cmd := &cobra.Command{
-		Use:   "edit <id>",
-		Short: "Edit a recurring task template",
-		Args:  cobra.ExactArgs(1),
+		Use:               "edit <id>",
+		Short:             "Edit a recurring task template",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeRecurringIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("cron") {
 				if _, err := cronutil.Parse(cronExpr); err != nil {
@@ -142,9 +144,10 @@ func newRecurListCmd() *cobra.Command {
 
 func newRecurRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "remove <id>",
-		Short: "Remove a recurring task template",
-		Args:  cobra.ExactArgs(1),
+		Use:               "remove <id>",
+		Short:             "Remove a recurring task template",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeRecurringIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {

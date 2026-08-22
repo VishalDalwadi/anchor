@@ -73,15 +73,17 @@ func newWatchAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&expected, "expected", "", "expected resolution date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&notes, "notes", "", "notes")
 	cmd.MarkFlagRequired("aspect")
+	registerAspectFlag(cmd)
 	return cmd
 }
 
 func newWatchEditCmd() *cobra.Command {
 	var text, expected, notes string
 	cmd := &cobra.Command{
-		Use:   "edit <id>",
-		Short: "Edit a watchlist item",
-		Args:  cobra.ExactArgs(1),
+		Use:               "edit <id>",
+		Short:             "Edit a watchlist item",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("expected") {
 				if err := validate.Date(expected); err != nil {
@@ -122,9 +124,10 @@ func newWatchEditCmd() *cobra.Command {
 func newWatchCheckCmd() *cobra.Command {
 	var notes string
 	cmd := &cobra.Command{
-		Use:   "check <id>",
-		Short: "Record a check-in on a watchlist item",
-		Args:  cobra.ExactArgs(1),
+		Use:               "check <id>",
+		Short:             "Record a check-in on a watchlist item",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
@@ -154,9 +157,10 @@ func newWatchCheckCmd() *cobra.Command {
 
 func newWatchResolveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "resolve <id>",
-		Short: "Mark a watchlist item resolved",
-		Args:  cobra.ExactArgs(1),
+		Use:               "resolve <id>",
+		Short:             "Mark a watchlist item resolved",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
@@ -215,6 +219,7 @@ func newWatchListCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&stale, "stale", false, fmt.Sprintf("only items unchecked for %d+ days", staleAfterDays))
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "filter by life aspect")
+	registerAspectFlag(cmd)
 	return cmd
 }
 

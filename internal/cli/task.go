@@ -68,15 +68,17 @@ func newTaskAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&due, "due", "", "due date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&context, "context", "", "context tag, e.g. phone, errand, desk, home")
 	cmd.MarkFlagRequired("aspect")
+	registerAspectFlag(cmd)
 	return cmd
 }
 
 func newTaskEditCmd() *cobra.Command {
 	var text, due, context, aspectFlag string
 	cmd := &cobra.Command{
-		Use:   "edit <id>",
-		Short: "Edit a task",
-		Args:  cobra.ExactArgs(1),
+		Use:               "edit <id>",
+		Short:             "Edit a task",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeTaskIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("aspect") {
 				if err := aspect.Validate(aspectFlag); err != nil {
@@ -121,24 +123,27 @@ func newTaskEditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&due, "due", "", "new due date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&context, "context", "", "new context tag")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "new life aspect")
+	registerAspectFlag(cmd)
 	return cmd
 }
 
 func newTaskDoneCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "done <id>",
-		Short: "Mark a task done",
-		Args:  cobra.ExactArgs(1),
-		RunE:  taskSetStatus(model.TaskDone),
+		Use:               "done <id>",
+		Short:             "Mark a task done",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeTaskIDs,
+		RunE:              taskSetStatus(model.TaskDone),
 	}
 }
 
 func newTaskDropCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "drop <id>",
-		Short: "Drop a task",
-		Args:  cobra.ExactArgs(1),
-		RunE:  taskSetStatus(model.TaskDropped),
+		Use:               "drop <id>",
+		Short:             "Drop a task",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeTaskIDs,
+		RunE:              taskSetStatus(model.TaskDropped),
 	}
 }
 
@@ -207,6 +212,7 @@ func newTaskListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "filter by life aspect")
 	cmd.Flags().StringVar(&context, "context", "", "filter by context tag")
 	cmd.Flags().BoolVar(&all, "all", false, "include done/dropped tasks")
+	registerAspectFlag(cmd)
 	return cmd
 }
 
