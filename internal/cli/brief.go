@@ -10,10 +10,12 @@ import (
 	"github.com/VishalDalwadi/anchor/internal/validate"
 )
 
-// newBriefCmd generates log/YYYY-MM-DD.md: a human-readable summary of
+// newBriefCmd prints today's briefing — a human-readable summary of
 // today's open tasks, upcoming due dates, active goals, and stale
-// watchlist items. Intended to be invoked by a Claude Cowork scheduled
-// task running server-side. log/ is output-only and never read back in.
+// watchlist items — and also writes it to log/YYYY-MM-DD.md (used when
+// this is invoked by a Claude Cowork scheduled task running server-side,
+// where there's no terminal to read stdout from). log/ is output-only
+// and never read back in.
 func newBriefCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "brief",
@@ -102,7 +104,7 @@ func newBriefCmd() *cobra.Command {
 			if err := s.WriteLog(todayStr, b.String()); err != nil {
 				return err
 			}
-			fmt.Printf("wrote log/%s.md\n", todayStr)
+			fmt.Print(b.String())
 			return nil
 		},
 	}
