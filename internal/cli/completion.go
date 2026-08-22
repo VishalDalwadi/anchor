@@ -33,6 +33,14 @@ func registerParentFlag(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("parent", completeGoalIDs)
 }
 
+// idCompletion formats a completion candidate as "<id>\t(<text>)": the id
+// is what actually gets inserted as the argument, and the parenthesized
+// text is the description shells display alongside it (so the id doesn't
+// have to be memorized to tell entries apart).
+func idCompletion(id, text string) string {
+	return id + "\t(" + text + ")"
+}
+
 // completeTaskIDs completes a task <id> positional argument.
 func completeTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) != 0 {
@@ -48,7 +56,7 @@ func completeTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 	}
 	out := make([]string, 0, len(tasks))
 	for _, t := range tasks {
-		out = append(out, t.ID+"\t"+t.Text)
+		out = append(out, idCompletion(t.ID, t.Text))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
@@ -69,7 +77,7 @@ func completeGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 	}
 	out := make([]string, 0, len(goals))
 	for _, g := range goals {
-		out = append(out, g.ID+"\t"+g.Text)
+		out = append(out, idCompletion(g.ID, g.Text))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
@@ -89,7 +97,7 @@ func completeWatchIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 	}
 	out := make([]string, 0, len(items))
 	for _, w := range items {
-		out = append(out, w.ID+"\t"+w.Text)
+		out = append(out, idCompletion(w.ID, w.Text))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
@@ -110,7 +118,7 @@ func completeRecurringIDs(cmd *cobra.Command, args []string, toComplete string) 
 	}
 	out := make([]string, 0, len(templates))
 	for _, r := range templates {
-		out = append(out, r.ID+"\t"+r.Text)
+		out = append(out, idCompletion(r.ID, r.Text))
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
