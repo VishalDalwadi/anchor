@@ -74,8 +74,9 @@ func openSubtasksError(id string, open []model.Task) error {
 // printTaskTree prints tasks with subtasks indented under their parent,
 // keeping file order among siblings. A task whose parent isn't among
 // those shown (done, or filtered out) is printed at the top level rather
-// than hidden.
-func printTaskTree(w io.Writer, tasks []model.Task) {
+// than hidden. flag, if non-nil, supplies an extra marker for a task's
+// line (see printTask).
+func printTaskTree(w io.Writer, tasks []model.Task, flag func(model.Task) string) {
 	shown := map[string]bool{}
 	for _, t := range tasks {
 		shown[t.ID] = true
@@ -97,7 +98,11 @@ func printTaskTree(w io.Writer, tasks []model.Task) {
 			return
 		}
 		printed[t.ID] = true
-		printTask(w, t, depth)
+		label := ""
+		if flag != nil {
+			label = flag(t)
+		}
+		printTask(w, t, depth, label)
 		for _, c := range children[t.ID] {
 			walk(c, depth+1)
 		}

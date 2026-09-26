@@ -27,7 +27,7 @@ func newRecurCmd() *cobra.Command {
 }
 
 func newRecurAddCmd() *cobra.Command {
-	var cronExpr, aspectFlag, context string
+	var cronExpr, aspectFlag, context, onMiss, until string
 	cmd := &cobra.Command{
 		Use:   "add <text>",
 		Short: "Add a recurring task template",
@@ -37,6 +37,13 @@ func newRecurAddCmd() *cobra.Command {
 				return err
 			}
 			if _, err := cronutil.Parse(cronExpr); err != nil {
+				return err
+			}
+			if err := validateOnMiss(onMiss); err != nil {
+				return err
+			}
+			untilDate, err := validate.FlexDate(until, time.Now())
+			if err != nil {
 				return err
 			}
 
@@ -55,6 +62,8 @@ func newRecurAddCmd() *cobra.Command {
 				Aspect:  aspectFlag,
 				Cron:    cronExpr,
 				Context: context,
+				OnMiss:  onMiss,
+				Until:   untilDate,
 			}
 			templates = append(templates, r)
 			if err := s.SaveRecurring(templates); err != nil {
@@ -67,6 +76,9 @@ func newRecurAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cronExpr, "cron", "", "5-field cron expression (required)")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "life aspect (required)")
 	cmd.Flags().StringVar(&context, "context", "", "context tag applied to spawned tasks")
+	cmd.Flags().StringVar(&onMiss, "on-miss", model.OnMissExpire, onMissUsage)
+	cmd.Flags().StringVar(&until, "until", "", dateUsage("last day a task may spawn (default: forever)"))
+	registerOnMissFlag(cmd)
 	cmd.MarkFlagRequired("cron")
 	cmd.MarkFlagRequired("aspect")
 	registerAspectFlag(cmd)
@@ -74,7 +86,7 @@ func newRecurAddCmd() *cobra.Command {
 }
 
 func newRecurEditCmd() *cobra.Command {
-	var text, cronExpr, context string
+	var text, cronExpr, context, onMiss, until string
 	cmd := &cobra.Command{
 		Use:               "edit <id>",
 		Short:             "Edit a recurring task template",
@@ -83,6 +95,17 @@ func newRecurEditCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("cron") {
 				if _, err := cronutil.Parse(cronExpr); err != nil {
+					return err
+				}
+			}
+			if cmd.Flags().Changed("on-miss") {
+				if err := validateOnMiss(onMiss); err != nil {
+					return err
+				}
+			}
+			if cmd.Flags().Changed("until") {
+				var err error
+				if until, err = validate.FlexDate(until, time.Now()); err != nil {
 					return err
 				}
 			}
@@ -108,12 +131,21 @@ func newRecurEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("context") {
 				templates[idx].Context = context
 			}
+			if cmd.Flags().Changed("on-miss") {
+				templates[idx].OnMiss = onMiss
+			}
+			if cmd.Flags().Changed("until") {
+				templates[idx].Until = until
+			}
 			return s.SaveRecurring(templates)
 		},
 	}
 	cmd.Flags().StringVar(&text, "text", "", "new text")
 	cmd.Flags().StringVar(&cronExpr, "cron", "", "new cron expression")
 	cmd.Flags().StringVar(&context, "context", "", "new context tag")
+	cmd.Flags().StringVar(&onMiss, "on-miss", "", onMissUsage)
+	cmd.Flags().StringVar(&until, "until", "", dateUsage(`new last day a task may spawn ("--until=" for forever)`))
+	registerOnMissFlag(cmd)
 	return cmd
 }
 
@@ -131,8 +163,19 @@ func newRecurListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			now := time.Now()
 			for _, r := range templates {
-				line := fmt.Sprintf("%s\t%-8s\t%q\t%s", r.ID, r.Aspect, r.Cron, r.Text)
+				onMiss := r.OnMiss
+				if onMiss == "" {
+					onMiss = model.OnMissExpire
+				}
+				line := fmt.Sprintf("%s\t%-8s\t%q\t%-7s\t%s", r.ID, r.Aspect, r.Cron, onMiss, r.Text)
+				if r.Until != "" {
+					line += "\tuntil " + r.Until
+					if recurEnded(r, now) {
+						line += " (ended)"
+					}
+				}
 				if r.LastSpawned != "" {
 					line += "\t(last spawned " + r.LastSpawned + ")"
 				}
@@ -168,14 +211,14 @@ func newRecurRemoveCmd() *cobra.Command {
 	}
 }
 
-// newRecurRunCmd evaluates every template's cron against today and spawns a
-// Task for any that are due and haven't already been spawned today.
-// Idempotent: safe to invoke multiple times per day. Intended to be driven
-// by Windows Task Scheduler running daily, not invoked by other commands.
+// newRecurRunCmd spawns tasks for every template due by today (see
+// spawnRecurring for how on_miss shapes that). Idempotent: safe to invoke
+// multiple times per day. Intended to be driven by Windows Task Scheduler
+// running daily, not invoked by other commands.
 func newRecurRunCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run",
-		Short: "Spawn tasks for recurring templates due today",
+		Short: "Spawn tasks for recurring templates that are due",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
@@ -191,44 +234,44 @@ func newRecurRunCmd() *cobra.Command {
 				return err
 			}
 
-			today := time.Now()
-			todayStr := validate.Today()
-			spawned := 0
-
-			for i, r := range templates {
-				if r.LastSpawned == todayStr {
-					continue
-				}
-				sched, err := cronutil.Parse(r.Cron)
-				if err != nil {
-					return fmt.Errorf("template %s: %w", r.ID, err)
-				}
-				if !cronutil.MatchesDay(sched, today) {
-					continue
-				}
-
-				tasks = append(tasks, model.Task{
-					ID:              idgen.New("t"),
-					Text:            r.Text,
-					Aspect:          r.Aspect,
-					Created:         todayStr,
-					Status:          model.TaskOpen,
-					Context:         r.Context,
-					RecurringSource: r.ID,
-				})
-				templates[i].LastSpawned = todayStr
-				spawned++
+			tasks, res, err := spawnRecurring(templates, tasks, time.Now())
+			if err != nil {
+				return err
 			}
-
-			if spawned == 0 {
+			if res.spawned == 0 {
 				return nil
 			}
 			if err := s.SaveTasks(tasks); err != nil {
 				return err
 			}
-			return s.SaveRecurring(templates)
+			if err := s.SaveRecurring(templates); err != nil {
+				return err
+			}
+			msg := fmt.Sprintf("spawned %d task(s)", res.spawned)
+			if res.dropped > 0 {
+				msg += fmt.Sprintf(", dropped %d unfinished expired instance(s)", res.dropped)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), msg)
+			return nil
 		},
 	}
+}
+
+const onMissUsage = `what happens to an unfinished instance once its period passes: "expire" (dropped when the next spawns) or "persist" (stays open and overdue until done)`
+
+func validateOnMiss(s string) error {
+	for _, v := range model.ValidOnMiss {
+		if s == v {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid --on-miss %q: must be one of %v", s, model.ValidOnMiss)
+}
+
+func registerOnMissFlag(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("on-miss", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return model.ValidOnMiss, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 func findRecurring(templates []model.RecurringTemplate, id string) int {

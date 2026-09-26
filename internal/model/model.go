@@ -73,4 +73,27 @@ type RecurringTemplate struct {
 	Cron        string `json:"cron"` // standard 5-field cron expression
 	Context     string `json:"context,omitempty"`
 	LastSpawned string `json:"last_spawned,omitempty"` // YYYY-MM-DD, prevents double-spawn same period
+	OnMiss      string `json:"on_miss,omitempty"`      // expire (default) | persist
+	Until       string `json:"until,omitempty"`        // YYYY-MM-DD, last day an instance may spawn; empty = forever
 }
+
+// RecurringTemplate on_miss values: what happens to a spawned task that
+// isn't done by the time its period has passed.
+const (
+	// OnMissExpire drops the unfinished instance when the next one spawns,
+	// and doesn't catch up on days recur run missed: habits like a daily
+	// workout, which aren't meant to be caught up on.
+	OnMissExpire = "expire"
+	// OnMissPersist keeps every unfinished instance open (and overdue)
+	// until it's done, and catches up on days recur run missed: fixed
+	// obligations like tax installments, where missing one doesn't cancel
+	// it.
+	OnMissPersist = "persist"
+)
+
+// ValidOnMiss lists the valid on_miss values.
+var ValidOnMiss = []string{OnMissExpire, OnMissPersist}
+
+// Persists reports whether r keeps unfinished instances around. An empty
+// on_miss (templates from before it existed) means expire.
+func (r RecurringTemplate) Persists() bool { return r.OnMiss == OnMissPersist }

@@ -249,6 +249,12 @@ func newTaskListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			templates, err := s.LoadRecurring()
+			if err != nil {
+				return err
+			}
+			byID := templatesByID(templates)
+			now := time.Now()
 
 			todayStr := validate.Today()
 			var shown []model.Task
@@ -267,7 +273,9 @@ func newTaskListCmd() *cobra.Command {
 				}
 				shown = append(shown, t)
 			}
-			printTaskTree(cmd.OutOrStdout(), shown)
+			printTaskTree(cmd.OutOrStdout(), shown, func(t model.Task) string {
+				return stillOwed(t, byID, now)
+			})
 			return nil
 		},
 	}
@@ -289,11 +297,15 @@ func findTask(tasks []model.Task, id string) int {
 }
 
 // printTask prints t as one list line, indented two spaces per depth
-// level (subtasks under their parent).
-func printTask(w io.Writer, t model.Task, depth int) {
+// level (subtasks under their parent). A non-empty flag (e.g. "still
+// owed") is shown right after the due date, where it can't be missed.
+func printTask(w io.Writer, t model.Task, depth int, flag string) {
 	line := fmt.Sprintf("%s%s\t[%s]\t%-8s\t%s", strings.Repeat("  ", depth), t.ID, t.Status, t.Aspect, t.Text)
 	if t.Due != "" {
 		line += "\t(due " + t.Due + ")"
+	}
+	if flag != "" {
+		line += "\t" + flag
 	}
 	if t.Context != "" {
 		line += "\t{" + t.Context + "}"

@@ -84,7 +84,7 @@ func TestPrintTaskTree(t *testing.T) {
 		}
 	}
 	var out bytes.Buffer
-	printTaskTree(&out, shown)
+	printTaskTree(&out, shown, nil)
 
 	var got []string
 	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
@@ -100,7 +100,7 @@ func TestPrintTaskTreeOrphanShownAtTop(t *testing.T) {
 	// c1's parent p is filtered out (e.g. by --aspect): c1 and its own
 	// subtask must still show, at the top level.
 	var out bytes.Buffer
-	printTaskTree(&out, []model.Task{task("c1", "p", model.TaskOpen), task("g1", "c1", model.TaskOpen)})
+	printTaskTree(&out, []model.Task{task("c1", "p", model.TaskOpen), task("g1", "c1", model.TaskOpen)}, nil)
 	if got := out.String(); !strings.HasPrefix(got, "c1\t") || !strings.Contains(got, "\n  g1\t") {
 		t.Errorf("orphaned subtree printed as:\n%s", got)
 	}
@@ -109,7 +109,7 @@ func TestPrintTaskTreeOrphanShownAtTop(t *testing.T) {
 func TestPrintTaskTreeSurvivesParentLoop(t *testing.T) {
 	// Hand-edited data with a loop must not hang or drop tasks.
 	var out bytes.Buffer
-	printTaskTree(&out, []model.Task{task("a", "b", model.TaskOpen), task("b", "a", model.TaskOpen)})
+	printTaskTree(&out, []model.Task{task("a", "b", model.TaskOpen), task("b", "a", model.TaskOpen)}, nil)
 	if n := strings.Count(out.String(), "\n"); n != 2 {
 		t.Errorf("printed %d lines for a 2-task loop, want 2:\n%s", n, out.String())
 	}
