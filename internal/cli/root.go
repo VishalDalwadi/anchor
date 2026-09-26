@@ -40,6 +40,10 @@ func newRootCmd(args []string) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "anchor",
 		Short: "anchor — externalize working memory: tasks, goals, watchlist, recurring tasks",
+		// main prints the returned error once as "anchor: <err>"; without
+		// these, cobra would also print it (plus the full usage text) first.
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	root.AddCommand(newTaskCmd())

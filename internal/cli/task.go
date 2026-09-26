@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -34,7 +35,8 @@ func newTaskAddCmd() *cobra.Command {
 			if err := aspect.Validate(aspectFlag); err != nil {
 				return err
 			}
-			if err := validate.Date(due); err != nil {
+			dueDate, err := validate.FlexDate(due, time.Now())
+			if err != nil {
 				return err
 			}
 
@@ -52,7 +54,7 @@ func newTaskAddCmd() *cobra.Command {
 				Text:    args[0],
 				Aspect:  aspectFlag,
 				Created: validate.Today(),
-				Due:     due,
+				Due:     dueDate,
 				Status:  model.TaskOpen,
 				Context: context,
 			}
@@ -65,7 +67,7 @@ func newTaskAddCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "life aspect (required)")
-	cmd.Flags().StringVar(&due, "due", "", "due date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&due, "due", "", dateUsage("due date"))
 	cmd.Flags().StringVar(&context, "context", "", "context tag, e.g. phone, errand, desk, home")
 	cmd.MarkFlagRequired("aspect")
 	registerAspectFlag(cmd)
@@ -86,7 +88,8 @@ func newTaskEditCmd() *cobra.Command {
 				}
 			}
 			if cmd.Flags().Changed("due") {
-				if err := validate.Date(due); err != nil {
+				var err error
+				if due, err = validate.FlexDate(due, time.Now()); err != nil {
 					return err
 				}
 			}
@@ -120,7 +123,7 @@ func newTaskEditCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&text, "text", "", "new text")
-	cmd.Flags().StringVar(&due, "due", "", "new due date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&due, "due", "", dateUsage("new due date"))
 	cmd.Flags().StringVar(&context, "context", "", "new context tag")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "new life aspect")
 	registerAspectFlag(cmd)
@@ -235,4 +238,9 @@ func printTask(t model.Task) {
 		line += "\t{" + t.Context + "}"
 	}
 	fmt.Println(line)
+}
+
+// dateUsage is the help text for flexible date flags (--due, --expected).
+func dateUsage(what string) string {
+	return what + ": 2026-08-31, 2d/1w/1m, 72h, a month (aug), or a year (2026)"
 }

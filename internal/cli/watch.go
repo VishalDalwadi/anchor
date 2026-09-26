@@ -39,7 +39,8 @@ func newWatchAddCmd() *cobra.Command {
 			if err := aspect.Validate(aspectFlag); err != nil {
 				return err
 			}
-			if err := validate.Date(expected); err != nil {
+			expectedDate, err := validate.FlexDate(expected, time.Now())
+			if err != nil {
 				return err
 			}
 
@@ -56,7 +57,7 @@ func newWatchAddCmd() *cobra.Command {
 				ID:          idgen.New("w"),
 				Text:        args[0],
 				Aspect:      aspectFlag,
-				Expected:    expected,
+				Expected:    expectedDate,
 				LastChecked: validate.Today(),
 				Status:      model.WatchWaiting,
 				Notes:       notes,
@@ -70,7 +71,7 @@ func newWatchAddCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "life aspect (required)")
-	cmd.Flags().StringVar(&expected, "expected", "", "expected resolution date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&expected, "expected", "", dateUsage("expected resolution date"))
 	cmd.Flags().StringVar(&notes, "notes", "", "notes")
 	cmd.MarkFlagRequired("aspect")
 	registerAspectFlag(cmd)
@@ -86,7 +87,8 @@ func newWatchEditCmd() *cobra.Command {
 		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("expected") {
-				if err := validate.Date(expected); err != nil {
+				var err error
+				if expected, err = validate.FlexDate(expected, time.Now()); err != nil {
 					return err
 				}
 			}
@@ -116,7 +118,7 @@ func newWatchEditCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&text, "text", "", "new text")
-	cmd.Flags().StringVar(&expected, "expected", "", "new expected date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&expected, "expected", "", dateUsage("new expected date"))
 	cmd.Flags().StringVar(&notes, "notes", "", "new notes")
 	return cmd
 }
