@@ -78,6 +78,7 @@ func spawnRecurring(templates []model.RecurringTemplate, tasks []model.Task, tod
 				Status:          model.TaskOpen,
 				Context:         r.Context,
 				RecurringSource: r.ID,
+				Active:          true,
 			})
 			res.spawned++
 		}

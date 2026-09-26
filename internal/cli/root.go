@@ -51,6 +51,7 @@ func newRootCmd(args []string) *cobra.Command {
 	root.AddCommand(newRecurCmd())
 	root.AddCommand(newBriefCmd())
 	root.AddCommand(newInstallCmd())
+	root.AddCommand(newListCmd())
 	addFlagCompletionAfterArgs(root, isCompletionRequest(args))
 	addPowerShellCompletionExtras(root)
 

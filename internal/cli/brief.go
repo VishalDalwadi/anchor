@@ -53,6 +53,9 @@ func newBriefCmd() *cobra.Command {
 				if t.Due != "" && t.Due != todayStr {
 					continue
 				}
+				if !t.Active && t.Due == "" {
+					continue // backlogged, and no deadline making it today's business
+				}
 				fmt.Fprintf(&b, "- [%s] %s (%s)\n", t.ID, t.Text, t.Aspect)
 				any = true
 			}

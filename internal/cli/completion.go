@@ -262,6 +262,17 @@ func completeOpenTaskIDs(cmd *cobra.Command, args []string, toComplete string) (
 	return taskIDCompletions(func(t model.Task) bool { return t.Status == model.TaskOpen })
 }
 
+// completeActiveTaskIDs completes `task backlog`: open tasks not already
+// in the backlog.
+func completeActiveTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return taskIDCompletions(func(t model.Task) bool { return t.Status == model.TaskOpen && t.Active })
+}
+
+// completeBacklogTaskIDs completes `task activate`: backlogged tasks.
+func completeBacklogTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return taskIDCompletions(isBacklogged)
+}
+
 func taskIDCompletions(keep func(model.Task) bool) ([]string, cobra.ShellCompDirective) {
 	s, err := openStore()
 	if err != nil {

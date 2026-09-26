@@ -1,6 +1,8 @@
 // Package model defines the record shapes persisted by anchor.
 package model
 
+import "encoding/json"
+
 // Task statuses.
 const (
 	TaskOpen    = "open"
@@ -44,6 +46,30 @@ type Task struct {
 	RecurringSource string `json:"recurring_source,omitempty"` // id of recurring template, if spawned
 	Notes           string `json:"notes,omitempty"`            // freeform, may be multiline
 	Parent          string `json:"parent,omitempty"`           // id of the parent task, if this is a subtask
+	Active          bool   `json:"active"`                     // false = backlogged: open, but not now
+}
+
+// UnmarshalJSON decodes a Task, treating a missing "active" field as true:
+// tasks saved before backlogging existed must stay visible, not all turn
+// into backlog.
+func (t *Task) UnmarshalJSON(data []byte) error {
+	type plain Task // same fields, without this method (no recursion)
+	p := plain{Active: true}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*t = Task(p)
+	return nil
+}
+
+// Collection is a lightweight named list of freeform text lines ("movies
+// to watch"), for things that don't need a task's due dates, aspects or
+// status. A collection can sit inside another as a sublist.
+type Collection struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`             // unique across all collections, e.g. "movies-to-watch"
+	Items  []string `json:"items"`            // freeform text lines, no per-item metadata
+	Parent string   `json:"parent,omitempty"` // id of the collection this is a sublist of
 }
 
 type Goal struct {

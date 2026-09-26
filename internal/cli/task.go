@@ -25,8 +25,52 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskDropCmd())
 	cmd.AddCommand(newTaskListCmd())
 	cmd.AddCommand(newTaskShowCmd())
+	cmd.AddCommand(newTaskBacklogCmd())
+	cmd.AddCommand(newTaskActivateCmd())
 	return cmd
 }
+
+func newTaskBacklogCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:               "backlog <id>",
+		Short:             "Move a task to the backlog: still open, but hidden from `task list` until activated",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeActiveTaskIDs,
+		RunE:              taskSetActive(false),
+	}
+}
+
+func newTaskActivateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:               "activate <id>",
+		Short:             "Bring a backlogged task back into `task list`",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeBacklogTaskIDs,
+		RunE:              taskSetActive(true),
+	}
+}
+
+func taskSetActive(active bool) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		s, err := openStore()
+		if err != nil {
+			return err
+		}
+		tasks, err := s.LoadTasks()
+		if err != nil {
+			return err
+		}
+		idx := findTask(tasks, args[0])
+		if idx < 0 {
+			return fmt.Errorf("no task with id %q", args[0])
+		}
+		tasks[idx].Active = active
+		return s.SaveTasks(tasks)
+	}
+}
+
+// isBacklogged reports whether t is open but set aside for now.
+func isBacklogged(t model.Task) bool { return t.Status == model.TaskOpen && !t.Active }
 
 func newTaskAddCmd() *cobra.Command {
 	var aspectFlag, due, context, notes, parent string
@@ -70,6 +114,7 @@ func newTaskAddCmd() *cobra.Command {
 				Context: context,
 				Notes:   notes,
 				Parent:  parent,
+				Active:  true,
 			}
 			tasks = append(tasks, t)
 			if err := s.SaveTasks(tasks); err != nil {
@@ -229,10 +274,10 @@ func taskSetStatus(status string, check func(tasks []model.Task, id string) erro
 func newTaskListCmd() *cobra.Command {
 	var today bool
 	var aspectFlag, context string
-	var all bool
+	var all, backlog bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List tasks",
+		Short: "List open tasks (not backlogged ones, unless --backlog or --all)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if aspectFlag != "" {
@@ -259,7 +304,11 @@ func newTaskListCmd() *cobra.Command {
 			todayStr := validate.Today()
 			var shown []model.Task
 			for _, t := range tasks {
-				if !all && t.Status != model.TaskOpen {
+				switch {
+				case all:
+				case backlog && !isBacklogged(t):
+					continue
+				case !backlog && (t.Status != model.TaskOpen || isBacklogged(t)):
 					continue
 				}
 				if today && t.Due != todayStr {
@@ -282,7 +331,9 @@ func newTaskListCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&today, "today", false, "only tasks due today")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "filter by life aspect")
 	cmd.Flags().StringVar(&context, "context", "", "filter by context tag")
-	cmd.Flags().BoolVar(&all, "all", false, "include done/dropped tasks")
+	cmd.Flags().BoolVar(&all, "all", false, "include done, dropped and backlogged tasks")
+	cmd.Flags().BoolVar(&backlog, "backlog", false, "only backlogged tasks")
+	cmd.MarkFlagsMutuallyExclusive("all", "backlog")
 	registerAspectFlag(cmd)
 	return cmd
 }
@@ -300,7 +351,11 @@ func findTask(tasks []model.Task, id string) int {
 // level (subtasks under their parent). A non-empty flag (e.g. "still
 // owed") is shown right after the due date, where it can't be missed.
 func printTask(w io.Writer, t model.Task, depth int, flag string) {
-	line := fmt.Sprintf("%s%s\t[%s]\t%-8s\t%s", strings.Repeat("  ", depth), t.ID, t.Status, t.Aspect, t.Text)
+	status := t.Status
+	if isBacklogged(t) {
+		status += "/backlog"
+	}
+	line := fmt.Sprintf("%s%s\t[%s]\t%-8s\t%s", strings.Repeat("  ", depth), t.ID, status, t.Aspect, t.Text)
 	if t.Due != "" {
 		line += "\t(due " + t.Due + ")"
 	}

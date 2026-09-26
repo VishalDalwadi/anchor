@@ -42,7 +42,7 @@ func TestEmptyWordCompletion(t *testing.T) {
 		// Nor are flags mutually exclusive with one already given.
 		{[]string{"task", "edit", "t_x", "--notes", "n", ""}, []string{"--aspect", "--context", "--due", "--help", "--parent", "--text"}},
 		// No positional args at all: flags straight away.
-		{[]string{"task", "list", ""}, []string{"--all", "--aspect", "--context", "--help", "--today"}},
+		{[]string{"task", "list", ""}, []string{"--all", "--aspect", "--backlog", "--context", "--help", "--today"}},
 		// Free text expected: nothing, not even the required --aspect.
 		{[]string{"task", "add", ""}, nil},
 	}

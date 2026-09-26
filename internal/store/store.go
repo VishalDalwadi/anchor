@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	tasksPath     = "tasks.json"
-	goalsPath     = "goals.json"
-	watchPath     = "watchlist.json"
-	recurringPath = "recurring.json"
+	tasksPath       = "tasks.json"
+	goalsPath       = "goals.json"
+	watchPath       = "watchlist.json"
+	recurringPath   = "recurring.json"
+	collectionsPath = "collections.json"
 )
 
 type Store struct {
@@ -67,6 +68,13 @@ func (s *Store) LoadRecurring() ([]model.RecurringTemplate, error) {
 }
 func (s *Store) SaveRecurring(r []model.RecurringTemplate) error {
 	return saveJSON(s, recurringPath, r)
+}
+
+func (s *Store) LoadCollections() ([]model.Collection, error) {
+	return loadJSON[model.Collection](s, collectionsPath)
+}
+func (s *Store) SaveCollections(c []model.Collection) error {
+	return saveJSON(s, collectionsPath, c)
 }
 
 // WriteLog writes a generated daily briefing. log/ is output-only and is
