@@ -43,6 +43,7 @@ type Task struct {
 	Context         string `json:"context,omitempty"`          // e.g. phone, errand, desk, home
 	RecurringSource string `json:"recurring_source,omitempty"` // id of recurring template, if spawned
 	Notes           string `json:"notes,omitempty"`            // freeform, may be multiline
+	Parent          string `json:"parent,omitempty"`           // id of the parent task, if this is a subtask
 }
 
 type Goal struct {

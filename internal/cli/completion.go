@@ -232,6 +232,12 @@ func registerParentFlag(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("parent", completeGoalIDs)
 }
 
+// registerTaskParentFlag wires --parent completion onto a task command
+// with the IDs of open tasks.
+func registerTaskParentFlag(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("parent", completeOpenTaskIDs)
+}
+
 // idCompletion formats a completion candidate as "<id>\t(<text>)": the id
 // is what actually gets inserted as the argument, and the parenthesized
 // text is the description shells display alongside it (so the id doesn't
@@ -240,11 +246,23 @@ func idCompletion(id, text string) string {
 	return id + "\t(" + text + ")"
 }
 
-// completeTaskIDs completes a task <id> positional argument.
+// The id completers below serve both positional <id> arguments and flags
+// that take an id (like --parent). They don't check which positional
+// argument is being completed: addFlagCompletionAfterArgs only calls a
+// command's ValidArgsFunction while a positional arg is still expected.
+
+// completeTaskIDs completes a task <id> argument.
 func completeTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
+	return taskIDCompletions(func(model.Task) bool { return true })
+}
+
+// completeOpenTaskIDs completes --parent for tasks: only open tasks can
+// take subtasks.
+func completeOpenTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return taskIDCompletions(func(t model.Task) bool { return t.Status == model.TaskOpen })
+}
+
+func taskIDCompletions(keep func(model.Task) bool) ([]string, cobra.ShellCompDirective) {
 	s, err := openStore()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -255,7 +273,9 @@ func completeTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 	}
 	out := make([]string, 0, len(tasks))
 	for _, t := range tasks {
-		out = append(out, idCompletion(t.ID, t.Text))
+		if keep(t) {
+			out = append(out, idCompletion(t.ID, t.Text))
+		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
@@ -263,9 +283,6 @@ func completeTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 // completeGoalIDs completes a goal <id> positional argument (and the
 // --parent flag, which also expects a goal ID).
 func completeGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
 	s, err := openStore()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -283,9 +300,6 @@ func completeGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeWatchIDs completes a watchlist <id> positional argument.
 func completeWatchIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
 	s, err := openStore()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -304,9 +318,6 @@ func completeWatchIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 // completeRecurringIDs completes a recurring template <id> positional
 // argument.
 func completeRecurringIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
 	s, err := openStore()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError

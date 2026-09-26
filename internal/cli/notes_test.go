@@ -60,7 +60,7 @@ func TestNotesPreview(t *testing.T) {
 
 func TestPrintTaskDetail(t *testing.T) {
 	var out bytes.Buffer
-	printTaskDetail(&out, model.Task{
+	printTaskDetail(&out, nil, model.Task{
 		ID:      "t_1",
 		Text:    "read the paper",
 		Status:  model.TaskOpen,

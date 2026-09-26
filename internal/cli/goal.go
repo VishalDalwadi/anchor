@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -112,8 +113,10 @@ func newGoalEditCmd() *cobra.Command {
 			if idx < 0 {
 				return fmt.Errorf("no goal with id %q", args[0])
 			}
-			if cmd.Flags().Changed("parent") && findGoal(goals, parent) < 0 {
-				return fmt.Errorf("no goal with id %q to use as parent", parent)
+			if cmd.Flags().Changed("parent") && parent != "" {
+				if err := validateGoalParent(goals, args[0], parent); err != nil {
+					return err
+				}
 			}
 			if cmd.Flags().Changed("text") {
 				goals[idx].Text = text
@@ -129,7 +132,7 @@ func newGoalEditCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&text, "text", "", "new text")
 	cmd.Flags().StringVar(&period, "period", "", "new period")
-	cmd.Flags().StringVar(&parent, "parent", "", "new parent goal id")
+	cmd.Flags().StringVar(&parent, "parent", "", `new parent goal id ("--parent=" to detach it)`)
 	registerParentFlag(cmd)
 	return cmd
 }
@@ -213,10 +216,10 @@ func newGoalListCmd() *cobra.Command {
 			}
 
 			if tree {
-				printGoalTree(filtered)
+				printGoalTree(cmd.OutOrStdout(), filtered)
 			} else {
 				for _, g := range filtered {
-					printGoal(g, 0)
+					printGoal(cmd.OutOrStdout(), g, 0)
 				}
 			}
 			return nil
@@ -230,26 +233,70 @@ func newGoalListCmd() *cobra.Command {
 	return cmd
 }
 
-func printGoalTree(goals []model.Goal) {
+// validateGoalParent checks that parentID can be the parent of goal
+// childID: it must exist and not be the goal itself or one of its own
+// descendants, which would make a loop.
+func validateGoalParent(goals []model.Goal, childID, parentID string) error {
+	if findGoal(goals, parentID) < 0 {
+		return fmt.Errorf("no goal with id %q to use as parent", parentID)
+	}
+	for id := parentID; id != ""; {
+		if id == childID {
+			return fmt.Errorf("goal %s can't be moved under %s: that's itself or one of its own descendants", childID, parentID)
+		}
+		i := findGoal(goals, id)
+		if i < 0 {
+			break
+		}
+		id = goals[i].Parent
+	}
+	return nil
+}
+
+// printGoalTree prints goals with children indented under their parent.
+// A goal whose parent isn't among those shown (filtered out by --tier or
+// --aspect, or missing) is printed at the top level rather than hidden.
+func printGoalTree(w io.Writer, goals []model.Goal) {
+	shown := map[string]bool{}
+	for _, g := range goals {
+		shown[g.ID] = true
+	}
 	byParent := map[string][]model.Goal{}
 	for _, g := range goals {
-		byParent[g.Parent] = append(byParent[g.Parent], g)
+		parent := g.Parent
+		if !shown[parent] || parent == g.ID {
+			parent = ""
+		}
+		byParent[parent] = append(byParent[parent], g)
 	}
 	for _, list := range byParent {
 		sort.Slice(list, func(i, j int) bool { return list[i].Text < list[j].Text })
 	}
 
+	printed := map[string]bool{} // guards against a parent loop in hand-edited data
 	var walk func(parent string, depth int)
 	walk = func(parent string, depth int) {
 		for _, g := range byParent[parent] {
-			printGoal(g, depth)
+			if printed[g.ID] {
+				continue
+			}
+			printed[g.ID] = true
+			printGoal(w, g, depth)
 			walk(g.ID, depth+1)
 		}
 	}
 	walk("", 0)
+	// Anything left is stuck in a loop with no root; still show it.
+	for _, g := range goals {
+		if !printed[g.ID] {
+			printed[g.ID] = true
+			printGoal(w, g, 0)
+			walk(g.ID, 1)
+		}
+	}
 }
 
-func printGoal(g model.Goal, depth int) {
+func printGoal(w io.Writer, g model.Goal, depth int) {
 	indent := ""
 	for i := 0; i < depth; i++ {
 		indent += "  "
@@ -258,7 +305,7 @@ func printGoal(g model.Goal, depth int) {
 	if g.Period != "" {
 		line += "\t(" + g.Period + ")"
 	}
-	fmt.Println(line)
+	fmt.Fprintln(w, line)
 }
 
 func findGoal(goals []model.Goal, id string) int {
