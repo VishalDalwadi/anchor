@@ -13,15 +13,24 @@ import (
 	"github.com/VishalDalwadi/anchor/internal/store"
 )
 
+// anchorDir returns ~/.anchor/<parts...>.
+func anchorDir(parts ...string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(append([]string{home, ".anchor"}, parts...)...), nil
+}
+
 // openStore builds a Store over the local data directory, ~/.anchor/data.
 // Called lazily inside each command's RunE, not at startup, so commands
 // that don't touch storage never create it.
 func openStore() (*store.Store, error) {
-	home, err := os.UserHomeDir()
+	dir, err := anchorDir("data")
 	if err != nil {
 		return nil, err
 	}
-	backend, err := storage.NewLocal(filepath.Join(home, ".anchor", "data"))
+	backend, err := storage.NewLocal(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +64,7 @@ func newRootCmd(args []string) *cobra.Command {
 	root.AddCommand(newFocusCmd())
 	root.AddCommand(newJournalCmd())
 	root.AddCommand(newConfigCmd())
+	root.AddCommand(newCleanCmd())
 	addFlagCompletionAfterArgs(root, isCompletionRequest(args))
 	addPowerShellCompletionExtras(root)
 

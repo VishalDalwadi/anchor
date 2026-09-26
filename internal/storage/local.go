@@ -30,6 +30,10 @@ func (l *Local) ReadFile(path string) ([]byte, error) {
 	return data, nil
 }
 
+func (l *Local) Remove(path string) error {
+	return os.RemoveAll(filepath.Join(l.root, filepath.FromSlash(path)))
+}
+
 func (l *Local) WriteFile(path string, data []byte) error {
 	full := filepath.Join(l.root, filepath.FromSlash(path))
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {

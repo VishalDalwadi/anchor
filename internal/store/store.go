@@ -125,6 +125,23 @@ func (s *Store) SaveJournal(dateYYYYMMDD, content string) error {
 	return nil
 }
 
+// DataPaths is everything anchor stores, as logical paths: record files,
+// then directories of per-day files. It's what Clean deletes.
+var DataPaths = []string{
+	tasksPath, goalsPath, watchPath, recurringPath, collectionsPath, focusPath,
+	"journal", "log", "archive",
+}
+
+// Clean deletes all of anchor's data (every entry in DataPaths).
+func (s *Store) Clean() error {
+	for _, p := range DataPaths {
+		if err := s.backend.Remove(p); err != nil {
+			return fmt.Errorf("deleting %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
 // WriteLog writes a generated daily briefing. log/ is output-only and is
 // never read back in as a data source.
 func (s *Store) WriteLog(dateYYYYMMDD, content string) error {

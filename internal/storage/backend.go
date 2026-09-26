@@ -15,4 +15,9 @@ type Backend interface {
 	// WriteFile writes/overwrites the raw bytes at the given logical path.
 	// Must create intermediate directories as needed.
 	WriteFile(path string, data []byte) error
+
+	// Remove deletes the file, or the whole directory tree, at the given
+	// logical path (e.g. "tasks.json", "journal"). A path that doesn't
+	// exist is not an error.
+	Remove(path string) error
 }
