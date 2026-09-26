@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,11 +24,12 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskDoneCmd())
 	cmd.AddCommand(newTaskDropCmd())
 	cmd.AddCommand(newTaskListCmd())
+	cmd.AddCommand(newTaskShowCmd())
 	return cmd
 }
 
 func newTaskAddCmd() *cobra.Command {
-	var aspectFlag, due, context string
+	var aspectFlag, due, context, notes string
 	cmd := &cobra.Command{
 		Use:   "add <text>",
 		Short: "Add a task",
@@ -37,6 +40,9 @@ func newTaskAddCmd() *cobra.Command {
 			}
 			dueDate, err := validate.FlexDate(due, time.Now())
 			if err != nil {
+				return err
+			}
+			if notes, err = readNotes(cmd, notes); err != nil {
 				return err
 			}
 
@@ -57,6 +63,7 @@ func newTaskAddCmd() *cobra.Command {
 				Due:     dueDate,
 				Status:  model.TaskOpen,
 				Context: context,
+				Notes:   notes,
 			}
 			tasks = append(tasks, t)
 			if err := s.SaveTasks(tasks); err != nil {
@@ -69,13 +76,14 @@ func newTaskAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "life aspect (required)")
 	cmd.Flags().StringVar(&due, "due", "", dateUsage("due date"))
 	cmd.Flags().StringVar(&context, "context", "", "context tag, e.g. phone, errand, desk, home")
+	cmd.Flags().StringVar(&notes, "notes", "", notesUsage("notes"))
 	cmd.MarkFlagRequired("aspect")
 	registerAspectFlag(cmd)
 	return cmd
 }
 
 func newTaskEditCmd() *cobra.Command {
-	var text, due, context, aspectFlag string
+	var text, due, context, aspectFlag, notes, moreNotes string
 	cmd := &cobra.Command{
 		Use:               "edit <id>",
 		Short:             "Edit a task",
@@ -87,11 +95,17 @@ func newTaskEditCmd() *cobra.Command {
 					return err
 				}
 			}
+			var err error
 			if cmd.Flags().Changed("due") {
-				var err error
 				if due, err = validate.FlexDate(due, time.Now()); err != nil {
 					return err
 				}
+			}
+			if notes, err = readNotes(cmd, notes); err != nil {
+				return err
+			}
+			if moreNotes, err = readNotes(cmd, moreNotes); err != nil {
+				return err
 			}
 
 			s, err := openStore()
@@ -119,6 +133,12 @@ func newTaskEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("aspect") {
 				tasks[idx].Aspect = aspectFlag
 			}
+			if cmd.Flags().Changed("notes") {
+				tasks[idx].Notes = notes
+			}
+			if cmd.Flags().Changed("append-notes") {
+				tasks[idx].Notes = appendNotes(tasks[idx].Notes, moreNotes)
+			}
 			return s.SaveTasks(tasks)
 		},
 	}
@@ -126,6 +146,9 @@ func newTaskEditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&due, "due", "", dateUsage("new due date"))
 	cmd.Flags().StringVar(&context, "context", "", "new context tag")
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "new life aspect")
+	cmd.Flags().StringVar(&notes, "notes", "", notesUsage("replace notes"))
+	cmd.Flags().StringVar(&moreNotes, "append-notes", "", notesUsage("append a line to notes"))
+	cmd.MarkFlagsMutuallyExclusive("notes", "append-notes")
 	registerAspectFlag(cmd)
 	return cmd
 }
@@ -237,7 +260,59 @@ func printTask(t model.Task) {
 	if t.Context != "" {
 		line += "\t{" + t.Context + "}"
 	}
+	if t.Notes != "" {
+		line += "\tnotes: " + notesPreview(t.Notes)
+	}
 	fmt.Println(line)
+}
+
+func newTaskShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:               "show <id>",
+		Short:             "Show a task in full, including notes",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeTaskIDs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			tasks, err := s.LoadTasks()
+			if err != nil {
+				return err
+			}
+			idx := findTask(tasks, args[0])
+			if idx < 0 {
+				return fmt.Errorf("no task with id %q", args[0])
+			}
+			printTaskDetail(cmd.OutOrStdout(), tasks[idx])
+			return nil
+		},
+	}
+}
+
+// printTaskDetail prints every set field of t, one per line, followed by
+// its notes in full (indented, so multiline notes stay visibly grouped).
+func printTaskDetail(w io.Writer, t model.Task) {
+	field := func(label, value string) {
+		if value != "" {
+			fmt.Fprintf(w, "%-10s %s\n", label+":", value)
+		}
+	}
+	field("id", t.ID)
+	field("text", t.Text)
+	field("status", t.Status)
+	field("aspect", t.Aspect)
+	field("created", t.Created)
+	field("due", t.Due)
+	field("context", t.Context)
+	field("recurring", t.RecurringSource)
+	if t.Notes != "" {
+		fmt.Fprintln(w, "notes:")
+		for _, line := range strings.Split(t.Notes, "\n") {
+			fmt.Fprintln(w, "  "+line)
+		}
+	}
 }
 
 // dateUsage is the help text for flexible date flags (--due, --expected).

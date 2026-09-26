@@ -43,6 +43,9 @@ func newWatchAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if notes, err = readNotes(cmd, notes); err != nil {
+				return err
+			}
 
 			s, err := openStore()
 			if err != nil {
@@ -72,7 +75,7 @@ func newWatchAddCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&aspectFlag, "aspect", "", "life aspect (required)")
 	cmd.Flags().StringVar(&expected, "expected", "", dateUsage("expected resolution date"))
-	cmd.Flags().StringVar(&notes, "notes", "", "notes")
+	cmd.Flags().StringVar(&notes, "notes", "", notesUsage("notes"))
 	cmd.MarkFlagRequired("aspect")
 	registerAspectFlag(cmd)
 	return cmd
@@ -86,11 +89,14 @@ func newWatchEditCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
 			if cmd.Flags().Changed("expected") {
-				var err error
 				if expected, err = validate.FlexDate(expected, time.Now()); err != nil {
 					return err
 				}
+			}
+			if notes, err = readNotes(cmd, notes); err != nil {
+				return err
 			}
 
 			s, err := openStore()
@@ -119,7 +125,7 @@ func newWatchEditCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&text, "text", "", "new text")
 	cmd.Flags().StringVar(&expected, "expected", "", dateUsage("new expected date"))
-	cmd.Flags().StringVar(&notes, "notes", "", "new notes")
+	cmd.Flags().StringVar(&notes, "notes", "", notesUsage("new notes"))
 	return cmd
 }
 
@@ -131,6 +137,10 @@ func newWatchCheckCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			if notes, err = readNotes(cmd, notes); err != nil {
+				return err
+			}
 			s, err := openStore()
 			if err != nil {
 				return err
@@ -153,7 +163,7 @@ func newWatchCheckCmd() *cobra.Command {
 			return s.SaveWatchItems(items)
 		},
 	}
-	cmd.Flags().StringVar(&notes, "notes", "", "notes for this check-in")
+	cmd.Flags().StringVar(&notes, "notes", "", notesUsage("notes for this check-in"))
 	return cmd
 }
 

@@ -35,10 +35,12 @@ func TestEmptyWordCompletion(t *testing.T) {
 		want []string
 	}{
 		// Positional filled in: flags.
-		{[]string{"task", "edit", "t_x", ""}, []string{"--aspect", "--context", "--due", "--help", "--text"}},
-		{[]string{"task", "add", "foo", ""}, []string{"--aspect", "--context", "--due", "--help"}},
+		{[]string{"task", "edit", "t_x", ""}, []string{"--append-notes", "--aspect", "--context", "--due", "--help", "--notes", "--text"}},
+		{[]string{"task", "add", "foo", ""}, []string{"--aspect", "--context", "--due", "--help", "--notes"}},
 		// Flags already given aren't offered again.
-		{[]string{"task", "add", "foo", "--aspect", "work", ""}, []string{"--context", "--due", "--help"}},
+		{[]string{"task", "add", "foo", "--aspect", "work", ""}, []string{"--context", "--due", "--help", "--notes"}},
+		// Nor are flags mutually exclusive with one already given.
+		{[]string{"task", "edit", "t_x", "--notes", "n", ""}, []string{"--aspect", "--context", "--due", "--help", "--text"}},
 		// No positional args at all: flags straight away.
 		{[]string{"task", "list", ""}, []string{"--all", "--aspect", "--context", "--help", "--today"}},
 		// Free text expected: nothing, not even the required --aspect.

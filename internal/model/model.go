@@ -42,6 +42,7 @@ type Task struct {
 	Status          string `json:"status"`                     // open | done | dropped
 	Context         string `json:"context,omitempty"`          // e.g. phone, errand, desk, home
 	RecurringSource string `json:"recurring_source,omitempty"` // id of recurring template, if spawned
+	Notes           string `json:"notes,omitempty"`            // freeform, may be multiline
 }
 
 type Goal struct {
