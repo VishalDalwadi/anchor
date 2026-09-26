@@ -51,6 +51,45 @@ func TestConfigSetEditorKeepsEditorFlags(t *testing.T) {
 	}
 }
 
+func TestLookaheadPrecedence(t *testing.T) {
+	home := t.TempDir()
+	reminderFor := func(args ...string) bool {
+		out, err := runAnchor(t, home, append([]string{"brief"}, args...)...)
+		if err != nil {
+			t.Fatalf("brief %v: %v", args, err)
+		}
+		return strings.Contains(out, "### Due in 5 days")
+	}
+	if _, err := runAnchor(t, home, "task", "add", "x", "--aspect", "career", "--due", "5d"); err != nil {
+		t.Fatal(err)
+	}
+
+	if reminderFor() {
+		t.Error("default lookahead (3) reminded about a task due in 5 days")
+	}
+	if _, err := runAnchor(t, home, "config", "set", "lookahead", "7"); err != nil {
+		t.Fatal(err)
+	}
+	if !reminderFor() {
+		t.Error("configured lookahead 7 didn't remind about a task due in 5 days")
+	}
+	if reminderFor("--lookahead", "2") {
+		t.Error("--lookahead 2 didn't override the configured 7")
+	}
+	if _, err := runAnchor(t, home, "config", "unset", "lookahead"); err != nil {
+		t.Fatal(err)
+	}
+	if reminderFor() {
+		t.Error("after unset, lookahead should be back to the default 3")
+	}
+
+	for _, bad := range []string{"-1", "soon", "2.5"} {
+		if _, err := runAnchor(t, home, "config", "set", "lookahead", bad); err == nil {
+			t.Errorf("config set lookahead %s: want an error", bad)
+		}
+	}
+}
+
 func TestConfigRejectsUnknownKeys(t *testing.T) {
 	home := t.TempDir()
 	for _, args := range [][]string{{"config", "set", "colour", "blue"}, {"config", "unset", "colour"}} {

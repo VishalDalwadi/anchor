@@ -13,6 +13,16 @@ import (
 // configKeys lists the settings `anchor config` can change, with help text.
 var configKeys = []struct{ name, help string }{
 	{"editor", "command to write text in, e.g. `goland -e --wait` (the file is appended last)"},
+	{"lookahead", fmt.Sprintf("days ahead `brief` reminds about due tasks (default %d; --lookahead overrides)", defaultLookahead)},
+}
+
+// parseLookahead validates a lookahead setting or flag value.
+func parseLookahead(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("lookahead must be a whole number of days, 0 or more, not %q", s)
+	}
+	return n, nil
 }
 
 func newConfigCmd() *cobra.Command {
@@ -40,7 +50,12 @@ func newConfigShowCmd() *cobra.Command {
 			if len(c.Editor) > 0 {
 				editor = formatCommand(c.Editor)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "editor  %s\n", editor)
+			lookahead := fmt.Sprintf("%d (default)", defaultLookahead)
+			if c.Lookahead != nil {
+				lookahead = strconv.Itoa(*c.Lookahead)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%-10s %s\n", "editor", editor)
+			fmt.Fprintf(cmd.OutOrStdout(), "%-10s %s\n", "lookahead", lookahead)
 			return nil
 		},
 	}
@@ -49,7 +64,7 @@ func newConfigShowCmd() *cobra.Command {
 func newConfigSetCmd() *cobra.Command {
 	var keyHelp []string
 	for _, k := range configKeys {
-		keyHelp = append(keyHelp, fmt.Sprintf("  %-8s %s", k.name, k.help))
+		keyHelp = append(keyHelp, fmt.Sprintf("  %-10s %s", k.name, k.help))
 	}
 	return &cobra.Command{
 		Use:   "set <key> <value...>",
@@ -60,7 +75,8 @@ Everything after the key is the value, flags included, so an editor's own
 options pass straight through:
 
   anchor config set editor goland -e --wait
-  anchor config set editor "C:\Program Files\Some Editor\editor.exe" --wait`,
+  anchor config set editor "C:\Program Files\Some Editor\editor.exe" --wait
+  anchor config set lookahead 7`,
 		// The value may contain flags meant for the editor (-e, --wait);
 		// don't let cobra claim them.
 		DisableFlagParsing: true,
@@ -80,6 +96,15 @@ options pass straight through:
 			switch args[0] {
 			case "editor":
 				c.Editor = args[1:]
+			case "lookahead":
+				if len(args) != 2 {
+					return fmt.Errorf("usage: anchor config set lookahead <days>")
+				}
+				n, err := parseLookahead(args[1])
+				if err != nil {
+					return err
+				}
+				c.Lookahead = &n
 			default:
 				return unknownConfigKey(args[0])
 			}
@@ -102,6 +127,8 @@ func newConfigUnsetCmd() *cobra.Command {
 			switch args[0] {
 			case "editor":
 				c.Editor = nil
+			case "lookahead":
+				c.Lookahead = nil
 			default:
 				return unknownConfigKey(args[0])
 			}

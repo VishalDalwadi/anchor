@@ -16,6 +16,11 @@ type Config struct {
 	// Kept as a list so paths with spaces need no quoting. Empty means
 	// type into the terminal instead.
 	Editor []string `json:"editor,omitempty"`
+
+	// Lookahead is how many days ahead `brief` reminds about due tasks,
+	// unless --lookahead is given. nil means the built-in default (0 is a
+	// valid setting: today only).
+	Lookahead *int `json:"lookahead,omitempty"`
 }
 
 // Path is ~/.anchor/config.json.

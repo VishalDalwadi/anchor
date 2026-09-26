@@ -87,32 +87,56 @@ func spawnRecurring(templates []model.RecurringTemplate, tasks []model.Task, tod
 	return tasks, res, nil
 }
 
-// stillOwed describes an open, overdue instance of a persist template —
-// an obligation that's still pending — for list views. Empty for any
-// other task.
-func stillOwed(t model.Task, templates map[string]model.RecurringTemplate, today time.Time) string {
+// owed describes an open, overdue instance of a persist template: an
+// obligation that's still pending.
+type owed struct {
+	daysOverdue  int
+	laterPeriods int // fire days since it was due, up to today (or the template's end)
+}
+
+// owedStatus reports whether t is still owed, and by how much. False for
+// anything that isn't an open, overdue instance of a persist template.
+func owedStatus(t model.Task, templates map[string]model.RecurringTemplate, today time.Time) (owed, bool) {
 	if t.Status != model.TaskOpen || t.RecurringSource == "" || t.Due == "" {
-		return ""
+		return owed{}, false
 	}
 	r, ok := templates[t.RecurringSource]
 	if !ok || !r.Persists() {
-		return ""
+		return owed{}, false
 	}
 	due, err := time.ParseInLocation(validate.DateLayout, t.Due, today.Location())
 	if err != nil || !due.Before(startOfDay(today)) {
-		return ""
+		return owed{}, false
 	}
 
-	days := int(startOfDay(today).Sub(due).Hours()/24 + 0.5)
-	label := fmt.Sprintf("[!] still owed: %d day(s) overdue", days)
+	o := owed{daysOverdue: daysBetween(due, today)}
 	sched, err := cronutil.Parse(r.Cron)
 	through, uerr := spawnWindowEnd(r, today)
 	if err == nil && uerr == nil {
-		if n := len(cronutil.FireDays(sched, due, through)); n > 0 {
-			label += fmt.Sprintf(", %d later period(s) already due", n)
-		}
+		o.laterPeriods = len(cronutil.FireDays(sched, due, through))
+	}
+	return o, true
+}
+
+// stillOwed is the list-view flag for a still-owed task; empty otherwise.
+func stillOwed(t model.Task, templates map[string]model.RecurringTemplate, today time.Time) string {
+	o, ok := owedStatus(t, templates, today)
+	if !ok {
+		return ""
+	}
+	label := fmt.Sprintf("[!] still owed: %d day(s) overdue", o.daysOverdue)
+	if o.laterPeriods > 0 {
+		label += fmt.Sprintf(", %d later period(s) already due", o.laterPeriods)
 	}
 	return label
+}
+
+// daysBetween counts calendar days from from's day to to's day (negative
+// if to is earlier), independent of time of day and DST.
+func daysBetween(from, to time.Time) int {
+	a := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+	b := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+	return int(b.Sub(a).Hours() / 24)
 }
 
 // spawnWindowEnd is the last moment r may spawn for as of today: today
