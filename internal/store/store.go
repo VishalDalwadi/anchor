@@ -105,6 +105,26 @@ func (s *Store) SaveFocus(f model.FocusState) error {
 	return nil
 }
 
+func journalPath(dateYYYYMMDD string) string { return fmt.Sprintf("journal/%s.md", dateYYYYMMDD) }
+
+// LoadJournal returns a day's journal (plain markdown), or "" if nothing
+// has been written that day.
+func (s *Store) LoadJournal(dateYYYYMMDD string) (string, error) {
+	data, err := s.backend.ReadFile(journalPath(dateYYYYMMDD))
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", journalPath(dateYYYYMMDD), err)
+	}
+	return string(data), nil
+}
+
+// SaveJournal overwrites a day's journal with content.
+func (s *Store) SaveJournal(dateYYYYMMDD, content string) error {
+	if err := s.backend.WriteFile(journalPath(dateYYYYMMDD), []byte(content)); err != nil {
+		return fmt.Errorf("writing %s: %w", journalPath(dateYYYYMMDD), err)
+	}
+	return nil
+}
+
 // WriteLog writes a generated daily briefing. log/ is output-only and is
 // never read back in as a data source.
 func (s *Store) WriteLog(dateYYYYMMDD, content string) error {
