@@ -15,7 +15,7 @@ func goal(id, parent, tier string) model.Goal {
 // goalTreeLines prints the tree and returns each line's indent + id.
 func goalTreeLines(goals []model.Goal) []string {
 	var out bytes.Buffer
-	printGoalTree(&out, goals)
+	printGoalTree(&out, goals, nil)
 	var lines []string
 	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
 		lines = append(lines, strings.SplitN(line, "\t", 2)[0])

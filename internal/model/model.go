@@ -47,6 +47,15 @@ type Task struct {
 	Notes           string `json:"notes,omitempty"`            // freeform, may be multiline
 	Parent          string `json:"parent,omitempty"`           // id of the parent task, if this is a subtask
 	Active          bool   `json:"active"`                     // false = backlogged: open, but not now
+	Focus           bool   `json:"focus,omitempty"`            // marked as in focus: listed first
+}
+
+// FocusState is the aspect currently in focus, if any (focus.json). An
+// aspect isn't a record with an id, so its focus lives here rather than
+// on individual tasks and goals. Only one aspect can be in focus at a time.
+type FocusState struct {
+	Aspect string `json:"aspect,omitempty"` // one of the six aspects, or empty
+	Since  string `json:"since,omitempty"`  // YYYY-MM-DD, when focus was set
 }
 
 // UnmarshalJSON decodes a Task, treating a missing "active" field as true:
@@ -80,6 +89,7 @@ type Goal struct {
 	Period string `json:"period,omitempty"` // e.g. "2026", "2026-08", "2026-W34"; empty for life tier
 	Status string `json:"status"`           // active | done | dropped
 	Parent string `json:"parent,omitempty"` // id of the goal one tier up
+	Focus  bool   `json:"focus,omitempty"`  // marked as in focus: listed first
 }
 
 type WatchItem struct {

@@ -273,6 +273,22 @@ func completeBacklogTaskIDs(cmd *cobra.Command, args []string, toComplete string
 	return taskIDCompletions(isBacklogged)
 }
 
+func completeUnfocusedTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return taskIDCompletions(func(t model.Task) bool { return t.Status == model.TaskOpen && !t.Focus })
+}
+
+func completeFocusedTaskIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return taskIDCompletions(func(t model.Task) bool { return t.Focus })
+}
+
+func completeUnfocusedGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return goalIDCompletions(func(g model.Goal) bool { return g.Status == model.GoalActive && !g.Focus })
+}
+
+func completeFocusedGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return goalIDCompletions(func(g model.Goal) bool { return g.Focus })
+}
+
 func taskIDCompletions(keep func(model.Task) bool) ([]string, cobra.ShellCompDirective) {
 	s, err := openStore()
 	if err != nil {
@@ -294,6 +310,10 @@ func taskIDCompletions(keep func(model.Task) bool) ([]string, cobra.ShellCompDir
 // completeGoalIDs completes a goal <id> positional argument (and the
 // --parent flag, which also expects a goal ID).
 func completeGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return goalIDCompletions(func(model.Goal) bool { return true })
+}
+
+func goalIDCompletions(keep func(model.Goal) bool) ([]string, cobra.ShellCompDirective) {
 	s, err := openStore()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -304,7 +324,9 @@ func completeGoalIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 	}
 	out := make([]string, 0, len(goals))
 	for _, g := range goals {
-		out = append(out, idCompletion(g.ID, g.Text))
+		if keep(g) {
+			out = append(out, idCompletion(g.ID, g.Text))
+		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }

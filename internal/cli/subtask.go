@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/VishalDalwadi/anchor/internal/model"
@@ -75,20 +76,47 @@ func openSubtasksError(id string, open []model.Task) error {
 // keeping file order among siblings. A task whose parent isn't among
 // those shown (done, or filtered out) is printed at the top level rather
 // than hidden. flag, if non-nil, supplies an extra marker for a task's
-// line (see printTask).
-func printTaskTree(w io.Writer, tasks []model.Task, flag func(model.Task) string) {
-	shown := map[string]bool{}
+// line (see printTask). inFocus, if non-nil, says which tasks are in
+// focus: they're marked, and any tree (or subtree) containing one is
+// listed before its siblings.
+func printTaskTree(w io.Writer, tasks []model.Task, flag func(model.Task) string, inFocus func(model.Task) bool) {
+	shown := map[string]model.Task{}
 	for _, t := range tasks {
-		shown[t.ID] = true
+		shown[t.ID] = t
 	}
 	children := map[string][]model.Task{}
 	var roots []model.Task
 	for _, t := range tasks {
-		if t.Parent != "" && shown[t.Parent] && t.Parent != t.ID {
+		if _, ok := shown[t.Parent]; ok && t.Parent != t.ID {
 			children[t.Parent] = append(children[t.Parent], t)
 		} else {
 			roots = append(roots, t)
 		}
+	}
+
+	// hot: tasks in focus, and every shown ancestor of one.
+	hot := map[string]bool{}
+	anyFocus := false
+	if inFocus != nil {
+		for _, t := range tasks {
+			if !inFocus(t) {
+				continue
+			}
+			anyFocus = true
+			for id := t.ID; id != "" && !hot[id]; id = shown[id].Parent {
+				if _, ok := shown[id]; !ok {
+					break
+				}
+				hot[id] = true
+			}
+		}
+	}
+	hotFirst := func(list []model.Task) {
+		sort.SliceStable(list, func(i, j int) bool { return hot[list[i].ID] && !hot[list[j].ID] })
+	}
+	hotFirst(roots)
+	for _, list := range children {
+		hotFirst(list)
 	}
 
 	printed := map[string]bool{} // guards against a parent loop in hand-edited data
@@ -102,7 +130,14 @@ func printTaskTree(w io.Writer, tasks []model.Task, flag func(model.Task) string
 		if flag != nil {
 			label = flag(t)
 		}
-		printTask(w, t, depth, label)
+		mark := ""
+		if anyFocus {
+			mark = noFocusMark
+			if inFocus(t) {
+				mark = focusMark
+			}
+		}
+		printTask(w, mark, t, depth, label)
 		for _, c := range children[t.ID] {
 			walk(c, depth+1)
 		}

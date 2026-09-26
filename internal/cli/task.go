@@ -27,6 +27,8 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskShowCmd())
 	cmd.AddCommand(newTaskBacklogCmd())
 	cmd.AddCommand(newTaskActivateCmd())
+	cmd.AddCommand(newTaskFocusCmd(true))
+	cmd.AddCommand(newTaskFocusCmd(false))
 	return cmd
 }
 
@@ -300,6 +302,10 @@ func newTaskListCmd() *cobra.Command {
 			}
 			byID := templatesByID(templates)
 			now := time.Now()
+			focus, err := s.LoadFocus()
+			if err != nil {
+				return err
+			}
 
 			todayStr := validate.Today()
 			var shown []model.Task
@@ -324,7 +330,7 @@ func newTaskListCmd() *cobra.Command {
 			}
 			printTaskTree(cmd.OutOrStdout(), shown, func(t model.Task) string {
 				return stillOwed(t, byID, now)
-			})
+			}, taskInFocus(focus))
 			return nil
 		},
 	}
@@ -347,15 +353,16 @@ func findTask(tasks []model.Task, id string) int {
 	return -1
 }
 
-// printTask prints t as one list line, indented two spaces per depth
-// level (subtasks under their parent). A non-empty flag (e.g. "still
-// owed") is shown right after the due date, where it can't be missed.
-func printTask(w io.Writer, t model.Task, depth int, flag string) {
+// printTask prints t as one list line: mark first (the focus marker, or
+// blank padding), then indented two spaces per depth level (subtasks
+// under their parent). A non-empty flag (e.g. "still owed") is shown right
+// after the due date, where it can't be missed.
+func printTask(w io.Writer, mark string, t model.Task, depth int, flag string) {
 	status := t.Status
 	if isBacklogged(t) {
 		status += "/backlog"
 	}
-	line := fmt.Sprintf("%s%s\t[%s]\t%-8s\t%s", strings.Repeat("  ", depth), t.ID, status, t.Aspect, t.Text)
+	line := fmt.Sprintf("%s%s%s\t[%s]\t%-8s\t%s", mark, strings.Repeat("  ", depth), t.ID, status, t.Aspect, t.Text)
 	if t.Due != "" {
 		line += "\t(due " + t.Due + ")"
 	}

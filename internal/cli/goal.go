@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +24,8 @@ func newGoalCmd() *cobra.Command {
 	cmd.AddCommand(newGoalDoneCmd())
 	cmd.AddCommand(newGoalDropCmd())
 	cmd.AddCommand(newGoalListCmd())
+	cmd.AddCommand(newGoalFocusCmd(true))
+	cmd.AddCommand(newGoalFocusCmd(false))
 	return cmd
 }
 
@@ -215,12 +218,20 @@ func newGoalListCmd() *cobra.Command {
 				filtered = append(filtered, g)
 			}
 
+			focus, err := s.LoadFocus()
+			if err != nil {
+				return err
+			}
+			inFocus := goalInFocus(focus)
+
 			if tree {
-				printGoalTree(cmd.OutOrStdout(), filtered)
-			} else {
-				for _, g := range filtered {
-					printGoal(cmd.OutOrStdout(), g, 0)
-				}
+				printGoalTree(cmd.OutOrStdout(), filtered, inFocus)
+				return nil
+			}
+			sort.SliceStable(filtered, func(i, j int) bool { return inFocus(filtered[i]) && !inFocus(filtered[j]) })
+			anyFocus := len(filtered) > 0 && inFocus(filtered[0])
+			for _, g := range filtered {
+				printGoal(cmd.OutOrStdout(), goalMark(anyFocus, inFocus(g)), g, 0)
 			}
 			return nil
 		},
@@ -256,23 +267,50 @@ func validateGoalParent(goals []model.Goal, childID, parentID string) error {
 // printGoalTree prints goals with children indented under their parent.
 // A goal whose parent isn't among those shown (filtered out by --tier or
 // --aspect, or missing) is printed at the top level rather than hidden.
-func printGoalTree(w io.Writer, goals []model.Goal) {
-	shown := map[string]bool{}
+// Siblings are sorted by text, except that goals in focus (per inFocus,
+// if non-nil) — or with a descendant in focus — come first, and goals in
+// focus are marked.
+func printGoalTree(w io.Writer, goals []model.Goal, inFocus func(model.Goal) bool) {
+	shown := map[string]model.Goal{}
 	for _, g := range goals {
-		shown[g.ID] = true
+		shown[g.ID] = g
 	}
 	byParent := map[string][]model.Goal{}
 	for _, g := range goals {
 		parent := g.Parent
-		if !shown[parent] || parent == g.ID {
+		if _, ok := shown[parent]; !ok || parent == g.ID {
 			parent = ""
 		}
 		byParent[parent] = append(byParent[parent], g)
 	}
+
+	// hot: goals in focus, and every shown ancestor of one.
+	hot := map[string]bool{}
+	anyFocus := false
+	if inFocus != nil {
+		for _, g := range goals {
+			if !inFocus(g) {
+				continue
+			}
+			anyFocus = true
+			for id := g.ID; id != "" && !hot[id]; id = shown[id].Parent {
+				if _, ok := shown[id]; !ok {
+					break
+				}
+				hot[id] = true
+			}
+		}
+	}
 	for _, list := range byParent {
-		sort.Slice(list, func(i, j int) bool { return list[i].Text < list[j].Text })
+		sort.Slice(list, func(i, j int) bool {
+			if hot[list[i].ID] != hot[list[j].ID] {
+				return hot[list[i].ID]
+			}
+			return list[i].Text < list[j].Text
+		})
 	}
 
+	mark := func(g model.Goal) string { return goalMark(anyFocus, inFocus != nil && inFocus(g)) }
 	printed := map[string]bool{} // guards against a parent loop in hand-edited data
 	var walk func(parent string, depth int)
 	walk = func(parent string, depth int) {
@@ -281,7 +319,7 @@ func printGoalTree(w io.Writer, goals []model.Goal) {
 				continue
 			}
 			printed[g.ID] = true
-			printGoal(w, g, depth)
+			printGoal(w, mark(g), g, depth)
 			walk(g.ID, depth+1)
 		}
 	}
@@ -290,18 +328,28 @@ func printGoalTree(w io.Writer, goals []model.Goal) {
 	for _, g := range goals {
 		if !printed[g.ID] {
 			printed[g.ID] = true
-			printGoal(w, g, 0)
+			printGoal(w, mark(g), g, 0)
 			walk(g.ID, 1)
 		}
 	}
 }
 
-func printGoal(w io.Writer, g model.Goal, depth int) {
-	indent := ""
-	for i := 0; i < depth; i++ {
-		indent += "  "
+// goalMark is the focus marker for a goal's line: nothing when no goal in
+// the list is in focus, else the marker or matching blank padding.
+func goalMark(anyFocus, inFocus bool) string {
+	switch {
+	case !anyFocus:
+		return ""
+	case inFocus:
+		return focusMark
 	}
-	line := fmt.Sprintf("%s%s\t[%s]\t%-7s\t%-8s\t%s", indent, g.ID, g.Status, g.Tier, g.Aspect, g.Text)
+	return noFocusMark
+}
+
+// printGoal prints g as one list line: mark first (the focus marker, or
+// blank padding), then indented two spaces per depth level.
+func printGoal(w io.Writer, mark string, g model.Goal, depth int) {
+	line := fmt.Sprintf("%s%s%s\t[%s]\t%-7s\t%-8s\t%s", mark, strings.Repeat("  ", depth), g.ID, g.Status, g.Tier, g.Aspect, g.Text)
 	if g.Period != "" {
 		line += "\t(" + g.Period + ")"
 	}

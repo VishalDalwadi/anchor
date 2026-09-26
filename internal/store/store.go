@@ -16,6 +16,7 @@ const (
 	watchPath       = "watchlist.json"
 	recurringPath   = "recurring.json"
 	collectionsPath = "collections.json"
+	focusPath       = "focus.json"
 )
 
 type Store struct {
@@ -75,6 +76,33 @@ func (s *Store) LoadCollections() ([]model.Collection, error) {
 }
 func (s *Store) SaveCollections(c []model.Collection) error {
 	return saveJSON(s, collectionsPath, c)
+}
+
+// LoadFocus reads focus.json; a missing file means nothing is in focus.
+func (s *Store) LoadFocus() (model.FocusState, error) {
+	var f model.FocusState
+	data, err := s.backend.ReadFile(focusPath)
+	if err != nil {
+		return f, fmt.Errorf("reading %s: %w", focusPath, err)
+	}
+	if data == nil {
+		return f, nil
+	}
+	if err := json.Unmarshal(data, &f); err != nil {
+		return f, fmt.Errorf("parsing %s: %w", focusPath, err)
+	}
+	return f, nil
+}
+
+func (s *Store) SaveFocus(f model.FocusState) error {
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding %s: %w", focusPath, err)
+	}
+	if err := s.backend.WriteFile(focusPath, data); err != nil {
+		return fmt.Errorf("writing %s: %w", focusPath, err)
+	}
+	return nil
 }
 
 // WriteLog writes a generated daily briefing. log/ is output-only and is
