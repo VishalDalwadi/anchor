@@ -5,9 +5,8 @@ import (
 	"path/filepath"
 )
 
-// Local is the default Backend: it stores files under a root directory on
-// the local filesystem (typically ~/.anchor/data/). Zero configuration is
-// required to use it.
+// Local is a Backend that stores files under a root directory on the
+// local filesystem (typically ~/.anchor/data/).
 type Local struct {
 	root string
 }

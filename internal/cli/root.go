@@ -1,28 +1,27 @@
 // Package cli wires up the anchor command surface. All command logic here
 // operates purely against store.Store, which itself operates purely
-// against the storage.Backend interface — no command knows which concrete
-// backend (local, Dropbox) is active.
+// against the storage.Backend interface.
 package cli
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/VishalDalwadi/anchor/internal/config"
+	"github.com/VishalDalwadi/anchor/internal/storage"
 	"github.com/VishalDalwadi/anchor/internal/store"
 )
 
-// openStore loads config and builds a Store against the active backend.
-// Called lazily inside each command's RunE, not at startup, so that a
-// misconfigured backend only breaks commands that actually touch storage.
+// openStore builds a Store over the local data directory, ~/.anchor/data.
+// Called lazily inside each command's RunE, not at startup, so commands
+// that don't touch storage never create it.
 func openStore() (*store.Store, error) {
-	cfg, err := config.Load()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
-	backend, err := config.NewBackend(cfg)
+	backend, err := storage.NewLocal(filepath.Join(home, ".anchor", "data"))
 	if err != nil {
 		return nil, err
 	}

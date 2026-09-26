@@ -1,6 +1,6 @@
-// Package storage defines the pluggable persistence interface used by
-// anchor, and the concrete backends (local filesystem, Dropbox) that
-// satisfy it. No command logic should depend on a concrete backend type.
+// Package storage defines the persistence interface used by anchor, and
+// the local filesystem backend that satisfies it. No command logic should
+// depend on a concrete backend type.
 package storage
 
 // Backend is the storage interface every backend implements. All command
