@@ -186,6 +186,7 @@ func newWatchListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List watchlist items",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if aspectFlag != "" {
 				if err := aspect.Validate(aspectFlag); err != nil {

@@ -121,6 +121,7 @@ func newRecurListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List recurring task templates",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
@@ -175,6 +176,7 @@ func newRecurRunCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run",
 		Short: "Spawn tasks for recurring templates due today",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {

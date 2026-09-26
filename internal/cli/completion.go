@@ -1,11 +1,210 @@
 package cli
 
 import (
+	"io"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/VishalDalwadi/anchor/internal/aspect"
 	"github.com/VishalDalwadi/anchor/internal/model"
 )
+
+// powershellCompletionExtras is appended to cobra's generated PowerShell
+// completion script to paper over two PowerShell behaviors.
+//
+// Bare "-" / "--": PowerShell treats a lone dash word as the start of a
+// parameter name and does its own parameter-name completion instead of
+// calling the native argument completer cobra registers, so typing "--"
+// then Tab lists nothing (while "--d" works). TabExpansion2 — the function
+// every completion goes through — is wrapped so that when it finds nothing
+// for a bare dash word on an anchor line, it asks cobra's completer
+// directly. Guarded against wrapping twice if the script is re-sourced.
+//
+// Tab: makes Tab show the full candidate menu for anchor
+// command lines. PSReadLine's default Tab binding on Windows is
+// TabCompleteNext, which cycles through candidates one at a time and
+// hides their descriptions — useless for picking an id out of a list.
+// Rebinding Tab to MenuComplete globally would change every other
+// command's completion too, so instead Tab dispatches on the line: anchor
+// lines get MenuComplete, everything else keeps whatever Tab was bound to
+// before. Skipped when Tab is already MenuComplete (nothing to fix) or
+// already this handler (the script was sourced twice).
+const powershellCompletionExtras = `
+# anchor: complete flags for a bare "-" or "--", which PowerShell never
+# hands to native argument completers on its own.
+$global:__anchorCompleter = ${__anchorCompleterBlock}
+if (-not (Test-Path Function:\__anchorOrigTabExpansion2)) {
+    ${function:global:__anchorOrigTabExpansion2} = ${function:TabExpansion2}
+    function global:TabExpansion2 {
+        [CmdletBinding(DefaultParameterSetName = 'ScriptInputSet')]
+        param(
+            [Parameter(ParameterSetName = 'ScriptInputSet', Mandatory = $true, Position = 0)]
+            [string] $inputScript,
+            [Parameter(ParameterSetName = 'ScriptInputSet', Position = 1)]
+            [int] $cursorColumn = $inputScript.Length,
+            [Parameter(ParameterSetName = 'AstInputSet', Mandatory = $true, Position = 0)]
+            [System.Management.Automation.Language.Ast] $ast,
+            [Parameter(ParameterSetName = 'AstInputSet', Mandatory = $true, Position = 1)]
+            [System.Management.Automation.Language.Token[]] $tokens,
+            [Parameter(ParameterSetName = 'AstInputSet', Mandatory = $true, Position = 2)]
+            [System.Management.Automation.Language.IScriptPosition] $positionOfCursor,
+            [Parameter(ParameterSetName = 'ScriptInputSet', Position = 2)]
+            [Parameter(ParameterSetName = 'AstInputSet', Position = 3)]
+            [Hashtable] $options = $null
+        )
+        $result = __anchorOrigTabExpansion2 @PSBoundParameters
+        if ($PSCmdlet.ParameterSetName -ne 'ScriptInputSet' -or $result.CompletionMatches.Count -gt 0) {
+            return $result
+        }
+
+        $parsed = [System.Management.Automation.Language.Parser]::ParseInput($inputScript, [ref]$null, [ref]$null)
+        $cmd = $parsed.FindAll({
+            $args[0] -is [System.Management.Automation.Language.CommandAst] -and
+            $args[0].Extent.StartOffset -le $cursorColumn -and $args[0].Extent.EndOffset -ge $cursorColumn
+        }, $true) | Select-Object -Last 1
+        if (-not $cmd -or $cmd.GetCommandName() -notmatch '^(.*[\\/])?anchor(\.exe)?$') {
+            return $result
+        }
+        $word = $cmd.CommandElements | Where-Object {
+            $_.Extent.EndOffset -eq $cursorColumn -and ($_.Extent.Text -eq '-' -or $_.Extent.Text -eq '--')
+        } | Select-Object -First 1
+        if (-not $word) {
+            return $result
+        }
+
+        $found = [System.Collections.ObjectModel.Collection[System.Management.Automation.CompletionResult]]::new()
+        foreach ($m in (& $global:__anchorCompleter $word.Extent.Text $cmd $cursorColumn)) {
+            if ($m -is [System.Management.Automation.CompletionResult]) {
+                $found.Add($m)
+            } elseif ("$m") {
+                $found.Add([System.Management.Automation.CompletionResult]::new("$m"))
+            }
+        }
+        if ($found.Count -eq 0) {
+            return $result
+        }
+        return [System.Management.Automation.CommandCompletion]::new($found, -1, $word.Extent.StartOffset, $word.Extent.Text.Length)
+    }
+}
+
+# anchor: menu completion on Tab for anchor command lines only.
+if (Get-Module PSReadLine) {
+    $__anchorPrevTab = (Get-PSReadLineKeyHandler | Where-Object { $_.Key -eq 'Tab' }).Function
+    if ($__anchorPrevTab -ne 'MenuComplete' -and $__anchorPrevTab -ne 'AnchorTab') {
+        $__anchorFallback = $null
+        try { $__anchorFallback = [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($__anchorPrevTab) } catch {}
+        if (-not $__anchorFallback) {
+            $__anchorFallback = [Microsoft.PowerShell.PSConsoleReadLine].GetMethod('TabCompleteNext')
+        }
+        Set-PSReadLineKeyHandler -Key Tab -BriefDescription 'AnchorTab' -Description 'MenuComplete for anchor commands, previous Tab behavior otherwise' -ScriptBlock ({
+            param($key, $arg)
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            if ($line -match '^\s*(\S*[\\/])?anchor(\.exe)?\s') {
+                [Microsoft.PowerShell.PSConsoleReadLine]::MenuComplete($key, $arg)
+            } else {
+                $__anchorFallback.Invoke($null, @($key, $arg))
+            }
+        }.GetNewClosure())
+    }
+    Remove-Variable __anchorPrevTab, __anchorFallback -ErrorAction SilentlyContinue
+}
+`
+
+// addPowerShellCompletionExtras appends powershellCompletionExtras to the output of
+// cobra's built-in `completion powershell` command. Hooking the generated
+// script (rather than the profile line `anchor install` writes) means
+// existing installs pick the fix up on their next shell start, since
+// their profile already sources this command's output.
+func addPowerShellCompletionExtras(root *cobra.Command) {
+	root.InitDefaultCompletionCmd()
+	for _, c := range root.Commands() {
+		if c.Name() != "completion" {
+			continue
+		}
+		for _, sub := range c.Commands() {
+			if sub.Name() != "powershell" {
+				continue
+			}
+			// Regenerate cobra's script here rather than calling the
+			// original RunE: that one writes to the output stream captured
+			// when the command was built, not cmd.OutOrStdout().
+			sub.RunE = func(cmd *cobra.Command, args []string) error {
+				out := cmd.OutOrStdout()
+				gen := cmd.Root().GenPowerShellCompletionWithDesc
+				if noDesc, _ := cmd.Flags().GetBool("no-descriptions"); noDesc {
+					gen = cmd.Root().GenPowerShellCompletion
+				}
+				if err := gen(out); err != nil {
+					return err
+				}
+				_, err := io.WriteString(out, powershellCompletionExtras)
+				return err
+			}
+		}
+	}
+}
+
+// isCompletionRequest reports whether args (os.Args[1:]) is a shell asking
+// cobra for completions rather than a real invocation.
+func isCompletionRequest(args []string) bool {
+	return len(args) > 0 && (args[0] == cobra.ShellCompRequestCmd || args[0] == cobra.ShellCompNoDescRequestCmd)
+}
+
+// addFlagCompletionAfterArgs makes Tab on an empty word suggest a leaf
+// command's flags once its positional args are filled in (and right away
+// for commands that take none), while still suggesting only ids — or
+// nothing, for free text — where a positional arg is still expected.
+//
+// Cobra by itself only suggests flags for a word starting with "-", except
+// that it always tacks unset required flags onto every completion, even
+// where free text is expected: `task add <Tab>` would offer (and, in a
+// one-item menu, insert) --aspect before the task text. So for completion
+// requests only, the required-flag markers are stripped, leaving these
+// ValidArgsFunctions fully in charge. Real invocations keep them, so
+// required-flag validation is unaffected.
+func addFlagCompletionAfterArgs(root *cobra.Command, completing bool) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+		if c.HasSubCommands() || c.Hidden {
+			return
+		}
+		if completing {
+			c.Flags().VisitAll(func(f *pflag.Flag) {
+				delete(f.Annotations, cobra.BashCompOneRequiredFlag)
+			})
+		}
+		positional := c.ValidArgsFunction
+		c.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if cmd.ValidateArgs(append(args, toComplete)) == nil {
+				if positional == nil {
+					return nil, cobra.ShellCompDirectiveNoFileComp // free text expected
+				}
+				return positional(cmd, args, toComplete)
+			}
+			return flagCompletions(cmd), cobra.ShellCompDirectiveNoFileComp
+		}
+	}
+	walk(root)
+}
+
+// flagCompletions lists cmd's visible flags that haven't been given yet,
+// as "--name<TAB>usage" candidates.
+func flagCompletions(cmd *cobra.Command) []string {
+	var out []string
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if f.Hidden || f.Changed {
+			return
+		}
+		out = append(out, "--"+f.Name+"\t"+f.Usage)
+	})
+	return out
+}
 
 // completeAspect completes --aspect with the six fixed life aspects.
 func completeAspect(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

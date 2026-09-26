@@ -173,6 +173,7 @@ func newTaskListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List tasks",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if aspectFlag != "" {
 				if err := aspect.Validate(aspectFlag); err != nil {

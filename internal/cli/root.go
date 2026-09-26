@@ -6,6 +6,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -30,6 +31,12 @@ func openStore() (*store.Store, error) {
 
 // NewRootCmd builds the anchor root command.
 func NewRootCmd() *cobra.Command {
+	return newRootCmd(os.Args[1:])
+}
+
+// newRootCmd builds the root command for the given command-line args,
+// which only matter for telling a completion request from a real run.
+func newRootCmd(args []string) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "anchor",
 		Short: "anchor — externalize working memory: tasks, goals, watchlist, recurring tasks",
@@ -41,6 +48,8 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newRecurCmd())
 	root.AddCommand(newBriefCmd())
 	root.AddCommand(newInstallCmd())
+	addFlagCompletionAfterArgs(root, isCompletionRequest(args))
+	addPowerShellCompletionExtras(root)
 
 	return root
 }

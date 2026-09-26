@@ -179,6 +179,7 @@ func newGoalListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List goals",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if tier != "" {
 				if err := validateTier(tier); err != nil {

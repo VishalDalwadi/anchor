@@ -20,6 +20,7 @@ func newBriefCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "brief",
 		Short: "Generate today's briefing",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
