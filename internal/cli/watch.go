@@ -43,7 +43,7 @@ func newWatchAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if notes, err = readNotes(cmd, notes); err != nil {
+			if notes, err = readNotes(cmd, notes, ""); err != nil {
 				return err
 			}
 
@@ -95,9 +95,6 @@ func newWatchEditCmd() *cobra.Command {
 					return err
 				}
 			}
-			if notes, err = readNotes(cmd, notes); err != nil {
-				return err
-			}
 
 			s, err := openStore()
 			if err != nil {
@@ -110,6 +107,9 @@ func newWatchEditCmd() *cobra.Command {
 			idx := findWatch(items, args[0])
 			if idx < 0 {
 				return fmt.Errorf("no watchlist item with id %q", args[0])
+			}
+			if notes, err = readNotes(cmd, notes, items[idx].Notes); err != nil {
+				return err
 			}
 			if cmd.Flags().Changed("text") {
 				items[idx].Text = text
@@ -137,10 +137,6 @@ func newWatchCheckCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeWatchIDs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			if notes, err = readNotes(cmd, notes); err != nil {
-				return err
-			}
 			s, err := openStore()
 			if err != nil {
 				return err
@@ -152,6 +148,9 @@ func newWatchCheckCmd() *cobra.Command {
 			idx := findWatch(items, args[0])
 			if idx < 0 {
 				return fmt.Errorf("no watchlist item with id %q", args[0])
+			}
+			if notes, err = readNotes(cmd, notes, items[idx].Notes); err != nil {
+				return err
 			}
 			items[idx].LastChecked = validate.Today()
 			if cmd.Flags().Changed("notes") {

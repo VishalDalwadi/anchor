@@ -33,9 +33,22 @@ func TestEditTextReadsWhatTheEditorSaved(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	got, err := editText(cmd, fakeEditor(t, utf8BOM+"from the editor\r\n"))
+	got, err := editText(cmd, fakeEditor(t, utf8BOM+"from the editor\r\n"), "")
 	if err != nil || got != "from the editor\r\n" {
 		t.Errorf("editText = %q, %v; want the saved text, BOM dropped", got, err)
+	}
+}
+
+func TestEditTextStartsFromCurrentText(t *testing.T) {
+	// Replacing notes: the editor opens with the current ones in it. Here
+	// it's closed without saving, so they come back unchanged.
+	cmd := &cobra.Command{}
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetIn(strings.NewReader("\n"))
+	got, err := editText(cmd, fakeEditor(t, ""), "current notes\nline two")
+	if err != nil || normalizeText(got) != "current notes\nline two" {
+		t.Errorf("editText = %q, %v; want the current notes back", got, err)
 	}
 }
 
@@ -47,7 +60,7 @@ func TestEditTextWaitsWhenEditorReturnsEarly(t *testing.T) {
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&prompt)
 	cmd.SetIn(strings.NewReader("\n"))
-	got, err := editText(cmd, fakeEditor(t, ""))
+	got, err := editText(cmd, fakeEditor(t, ""), "")
 	if err != nil || got != "" {
 		t.Errorf("editText = %q, %v; want empty (cancelled)", got, err)
 	}

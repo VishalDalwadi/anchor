@@ -1,38 +1,25 @@
 package cli
 
 import (
-	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// notesUsage is the help text for notes flags; "-" reads from stdin so
-// multiline notes can be piped in without shell quoting.
+// notesUsage is the help text for notes flags; "-" is for multiline notes.
 func notesUsage(what string) string {
-	return what + ` ("-" reads from stdin, for multiline notes)`
+	return what + ` ("-": piped input, else your configured editor, else type it in)`
 }
 
-// utf8BOM is the byte-order mark some tools (notably PowerShell) prepend
-// to text piped into a native program.
-const utf8BOM = string(rune(0xFEFF))
-
-// readNotes resolves a notes flag value: "-" means read all of stdin,
-// anything else is taken literally. Stdin input has any leading BOM
-// dropped, Windows line endings normalized, and trailing newlines trimmed,
-// so piping a file in doesn't leave a dangling blank line.
-func readNotes(cmd *cobra.Command, value string) (string, error) {
+// readNotes resolves a notes flag value: "-" means multiline text from
+// readTextInput, with the editor (if configured) starting from current —
+// the notes being replaced, or "" for new or appended notes. Anything
+// else is taken literally.
+func readNotes(cmd *cobra.Command, value, current string) (string, error) {
 	if value != "-" {
 		return value, nil
 	}
-	data, err := io.ReadAll(cmd.InOrStdin())
-	if err != nil {
-		return "", fmt.Errorf("reading notes from stdin: %w", err)
-	}
-	s := strings.TrimPrefix(string(data), utf8BOM) // PowerShell may prepend a BOM when piping
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return strings.TrimRight(s, "\n"), nil
+	return readTextInput(cmd, current)
 }
 
 // appendNotes adds more on a new line after existing notes.

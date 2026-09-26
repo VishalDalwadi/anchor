@@ -88,7 +88,7 @@ func newTaskAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if notes, err = readNotes(cmd, notes); err != nil {
+			if notes, err = readNotes(cmd, notes, ""); err != nil {
 				return err
 			}
 
@@ -156,12 +156,6 @@ func newTaskEditCmd() *cobra.Command {
 					return err
 				}
 			}
-			if notes, err = readNotes(cmd, notes); err != nil {
-				return err
-			}
-			if moreNotes, err = readNotes(cmd, moreNotes); err != nil {
-				return err
-			}
 
 			s, err := openStore()
 			if err != nil {
@@ -175,6 +169,14 @@ func newTaskEditCmd() *cobra.Command {
 			idx := findTask(tasks, args[0])
 			if idx < 0 {
 				return fmt.Errorf("no task with id %q", args[0])
+			}
+			// Read after loading, so an editor replacing the notes can
+			// start from the current ones.
+			if notes, err = readNotes(cmd, notes, tasks[idx].Notes); err != nil {
+				return err
+			}
+			if moreNotes, err = readNotes(cmd, moreNotes, ""); err != nil {
+				return err
 			}
 			if cmd.Flags().Changed("parent") && parent != "" {
 				if err := validateParent(tasks, args[0], parent); err != nil {

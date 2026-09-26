@@ -14,7 +14,7 @@ func TestReadNotes(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetIn(strings.NewReader(utf8BOM + "https://example.com/doc\r\nread section 3 first\r\n\r\n"))
 
-	got, err := readNotes(cmd, "-")
+	got, err := readNotes(cmd, "-", "")
 	if err != nil {
 		t.Fatalf("readNotes(-): %v", err)
 	}
@@ -22,7 +22,7 @@ func TestReadNotes(t *testing.T) {
 		t.Errorf("readNotes(-) = %q, want %q", got, want)
 	}
 
-	got, err = readNotes(cmd, "literal")
+	got, err = readNotes(cmd, "literal", "")
 	if err != nil || got != "literal" {
 		t.Errorf("readNotes(literal) = %q, %v; want the value unchanged", got, err)
 	}

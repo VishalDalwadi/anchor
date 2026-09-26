@@ -1,17 +1,12 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/VishalDalwadi/anchor/internal/config"
 	"github.com/VishalDalwadi/anchor/internal/validate"
 )
 
@@ -169,78 +164,12 @@ func ensureTrailingNewline(s string) string {
 	return s + "\n"
 }
 
-// journalEntryText works out where a new entry comes from: the arguments;
-// stdin when asked for with "-" or when something's piped in; else the
-// configured editor; else typed into the terminal.
+// journalEntryText gets a new entry: the arguments as text, or (for "-"
+// or no arguments) multiline input — piped, else the configured editor,
+// else typed into the terminal.
 func journalEntryText(cmd *cobra.Command, args []string) (string, error) {
-	switch {
-	case len(args) == 1 && args[0] == "-":
-		return readNotes(cmd, "-")
-	case len(args) > 0:
+	if len(args) > 0 && !(len(args) == 1 && args[0] == "-") {
 		return strings.Join(args, " "), nil
-	case !stdinIsTerminal(cmd):
-		return readNotes(cmd, "-")
 	}
-
-	c, err := config.Load()
-	if err != nil {
-		return "", err
-	}
-	if len(c.Editor) > 0 {
-		return editText(cmd, c.Editor)
-	}
-	fmt.Fprintln(cmd.ErrOrStderr(), "Type the entry; finish with Ctrl+Z then Enter (Ctrl+D on macOS/Linux), or Ctrl+C to cancel.")
-	fmt.Fprintln(cmd.ErrOrStderr(), "(To write in an editor instead: anchor config set editor <command>)")
-	return readNotes(cmd, "-")
-}
-
-// stdinIsTerminal reports whether the command's input is an interactive
-// console, as opposed to a pipe or file.
-func stdinIsTerminal(cmd *cobra.Command) bool {
-	f, ok := cmd.InOrStdin().(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-// editText opens editor (program and arguments; the file is appended
-// last) on an empty temp file and returns what was saved in it.
-func editText(cmd *cobra.Command, editor []string) (string, error) {
-	f, err := os.CreateTemp("", "anchor-journal-*.md")
-	if err != nil {
-		return "", err
-	}
-	path := f.Name()
-	f.Close()
-	defer os.Remove(path)
-
-	ed := exec.Command(editor[0], append(editor[1:], path)...)
-	ed.Stdin, ed.Stdout, ed.Stderr = os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr()
-	if err := ed.Run(); err != nil {
-		return "", fmt.Errorf("running editor %s: %w", formatCommand(editor), err)
-	}
-
-	text, err := readEdited(path)
-	if err != nil || strings.TrimSpace(text) != "" {
-		return text, err
-	}
-	// Some editors return before the user is done — GoLand without
-	// --wait, or an editor that opens the file in an already-running
-	// window. Rather than read the still-empty file, wait for the user.
-	fmt.Fprintf(cmd.ErrOrStderr(), "Nothing saved yet. If the editor is still open, save the entry there and press Enter;\n"+
-		"otherwise press Enter to cancel. (An editor that waits avoids this, e.g. `goland -e --wait`.) ")
-	if _, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n'); err != nil && err != io.EOF {
-		return "", err
-	}
-	return readEdited(path)
-}
-
-func readEdited(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimPrefix(string(data), utf8BOM), nil // some editors save a BOM
+	return readTextInput(cmd, "")
 }
