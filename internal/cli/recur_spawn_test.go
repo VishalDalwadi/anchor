@@ -169,3 +169,25 @@ func TestStillOwed(t *testing.T) {
 		}
 	}
 }
+
+func TestSpawnDueInOffsetsDueFromFireDay(t *testing.T) {
+	// Weekly report spawned Monday, due Friday; one missed run caught up.
+	templates := []model.RecurringTemplate{{ID: "r_rep", Text: "weekly report", Aspect: "career", Cron: "0 9 * * 1", OnMiss: model.OnMissPersist, DueIn: "4d", LastSpawned: "2026-09-07"}}
+	tasks, _, err := spawnRecurring(templates, nil, at("2026-09-21"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := instances(tasks, "r_rep"), "2026-09-18:open 2026-09-25:open"; got != want {
+		t.Errorf("instances = %q, want %q (each due 4 days after its Monday)", got, want)
+	}
+	if templates[0].LastSpawned != "2026-09-21" {
+		t.Errorf("last_spawned = %q, want the fire day, not the due day", templates[0].LastSpawned)
+	}
+}
+
+func TestSpawnRejectsBadDueIn(t *testing.T) {
+	templates := []model.RecurringTemplate{{ID: "r_bad", Text: "x", Aspect: "physical", Cron: "0 9 * * *", DueIn: "2026-10-01"}}
+	if _, _, err := spawnRecurring(templates, nil, at("2026-09-21")); err == nil {
+		t.Error("expected an error for an absolute due_in")
+	}
+}

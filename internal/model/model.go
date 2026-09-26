@@ -111,6 +111,7 @@ type RecurringTemplate struct {
 	LastSpawned string `json:"last_spawned,omitempty"` // YYYY-MM-DD, prevents double-spawn same period
 	OnMiss      string `json:"on_miss,omitempty"`      // expire (default) | persist
 	Until       string `json:"until,omitempty"`        // YYYY-MM-DD, last day an instance may spawn; empty = forever
+	DueIn       string `json:"due_in,omitempty"`       // relative offset (72h, 2d, 1w, 1m) from the fire day to each instance's due date; empty = due on the fire day
 }
 
 // RecurringTemplate on_miss values: what happens to a spawned task that

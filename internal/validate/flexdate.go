@@ -44,26 +44,8 @@ func FlexDate(s string, now time.Time) (string, error) {
 		return "", nil
 	}
 
-	bareMonths := shorthandRe.MatchString(in) && strings.HasSuffix(in, "m")
-	if !bareMonths {
-		if d, err := time.ParseDuration(in); err == nil {
-			return now.Add(d).Format(DateLayout), nil
-		}
-	}
-
-	if m := shorthandRe.FindStringSubmatch(in); m != nil {
-		n, err := strconv.Atoi(m[1])
-		if err != nil {
-			return "", fmt.Errorf("invalid date %q: %w", s, err)
-		}
-		switch m[2] {
-		case "d":
-			return now.AddDate(0, 0, n).Format(DateLayout), nil
-		case "w":
-			return now.AddDate(0, 0, 7*n).Format(DateLayout), nil
-		case "m":
-			return addMonthsClamped(now, n).Format(DateLayout), nil
-		}
+	if date, ok, err := relativeDate(in, now); ok || err != nil {
+		return date, err
 	}
 
 	if month, ok := months[in]; ok {
@@ -84,6 +66,61 @@ func FlexDate(s string, now time.Time) (string, error) {
 	}
 
 	return "", fmt.Errorf("invalid date %q\n%s", s, flexDateForms)
+}
+
+// dueOffsetForms is shown when --due-in input isn't a relative form.
+const dueOffsetForms = `accepted forms (relative only; no dates, month names, or years):
+  72h, 1h30m     Go duration (units h, m, s, ms, us, ns)
+  2d, 1w, 1m     days, weeks, or months (a bare <N>m is months, not minutes)`
+
+// DueOffset applies a relative offset (recur --due-in) to from, returning a
+// YYYY-MM-DD date. Only FlexDate's relative forms are accepted: Go
+// durations and <N>d/<N>w/<N>m shorthand. Absolute forms (dates, month
+// names, years) and negative offsets are rejected. Empty input returns "".
+func DueOffset(s string, from time.Time) (string, error) {
+	in := strings.ToLower(strings.TrimSpace(s))
+	if in == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(in, "-") {
+		return "", fmt.Errorf("invalid offset %q: must not be negative", s)
+	}
+	date, ok, err := relativeDate(in, from)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("invalid offset %q\n%s", s, dueOffsetForms)
+	}
+	return date, nil
+}
+
+// relativeDate parses FlexDate's relative forms (Go duration, then
+// <N>d/<N>w/<N>m shorthand) from lowercased, trimmed input. ok is false
+// when in is neither.
+func relativeDate(in string, now time.Time) (date string, ok bool, err error) {
+	bareMonths := shorthandRe.MatchString(in) && strings.HasSuffix(in, "m")
+	if !bareMonths {
+		if d, err := time.ParseDuration(in); err == nil {
+			return now.Add(d).Format(DateLayout), true, nil
+		}
+	}
+
+	if m := shorthandRe.FindStringSubmatch(in); m != nil {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			return "", false, fmt.Errorf("invalid date %q: %w", in, err)
+		}
+		switch m[2] {
+		case "d":
+			return now.AddDate(0, 0, n).Format(DateLayout), true, nil
+		case "w":
+			return now.AddDate(0, 0, 7*n).Format(DateLayout), true, nil
+		case "m":
+			return addMonthsClamped(now, n).Format(DateLayout), true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // addMonthsClamped adds n calendar months, clamping to the last day of the

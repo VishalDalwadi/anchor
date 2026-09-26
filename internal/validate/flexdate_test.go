@@ -94,3 +94,40 @@ func TestFlexDateRejectsGarbage(t *testing.T) {
 		}
 	}
 }
+
+func TestDueOffset(t *testing.T) {
+	// Fire days are midnight-aligned.
+	from := time.Date(2026, time.January, 31, 0, 0, 0, 0, time.Local)
+
+	tests := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"0d", "2026-01-31"},
+		{"3d", "2026-02-03"},
+		{"1w", "2026-02-07"},
+		{"1m", "2026-02-28"}, // clamps to month end
+		{"72h", "2026-02-03"},
+		{"23h", "2026-01-31"},
+		{" 2D ", "2026-02-02"},
+	}
+	for _, tt := range tests {
+		got, err := DueOffset(tt.in, from)
+		if err != nil {
+			t.Errorf("DueOffset(%q): unexpected error: %v", tt.in, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("DueOffset(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestDueOffsetRejectsAbsoluteAndNegative(t *testing.T) {
+	from := time.Date(2026, time.January, 31, 0, 0, 0, 0, time.Local)
+	for _, in := range []string{"2026-08-31", "aug", "august", "2026", "tomorrow", "-24h", "-2d", "1y"} {
+		if _, err := DueOffset(in, from); err == nil {
+			t.Errorf("DueOffset(%q): expected an error", in)
+		}
+	}
+}

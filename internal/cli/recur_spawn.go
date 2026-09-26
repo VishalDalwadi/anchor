@@ -18,7 +18,7 @@ type spawnResult struct {
 
 // spawnRecurring creates task instances for every template due by today,
 // updating tasks and templates in place. Each instance is due on the day
-// its cron fired. Safe to run repeatedly: a template's last_spawned day is
+// its cron fired, pushed out by the template's due_in if set. Safe to run repeatedly: a template's last_spawned day is
 // never spawned again.
 //
 // on_miss decides what a missed period means:
@@ -69,12 +69,16 @@ func spawnRecurring(templates []model.RecurringTemplate, tasks []model.Task, tod
 			}
 		}
 		for _, day := range days {
+			due, err := instanceDue(r, day)
+			if err != nil {
+				return tasks, res, err
+			}
 			tasks = append(tasks, model.Task{
 				ID:              idgen.New("t"),
 				Text:            r.Text,
 				Aspect:          r.Aspect,
 				Created:         todayStr,
-				Due:             day.Format(validate.DateLayout),
+				Due:             due,
 				Status:          model.TaskOpen,
 				Context:         r.Context,
 				RecurringSource: r.ID,
@@ -85,6 +89,19 @@ func spawnRecurring(templates []model.RecurringTemplate, tasks []model.Task, tod
 		templates[i].LastSpawned = days[len(days)-1].Format(validate.DateLayout)
 	}
 	return tasks, res, nil
+}
+
+// instanceDue is the due date of r's instance for fire day: the fire day
+// itself, or offset by r's due_in.
+func instanceDue(r model.RecurringTemplate, day time.Time) (string, error) {
+	if r.DueIn == "" {
+		return day.Format(validate.DateLayout), nil
+	}
+	due, err := validate.DueOffset(r.DueIn, day)
+	if err != nil {
+		return "", fmt.Errorf("template %s: bad due_in: %w", r.ID, err)
+	}
+	return due, nil
 }
 
 // owed describes an open, overdue instance of a persist template: an

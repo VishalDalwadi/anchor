@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -27,7 +28,7 @@ func newRecurCmd() *cobra.Command {
 }
 
 func newRecurAddCmd() *cobra.Command {
-	var cronExpr, aspectFlag, context, onMiss, until string
+	var cronExpr, aspectFlag, context, onMiss, until, dueIn string
 	cmd := &cobra.Command{
 		Use:   "add <text>",
 		Short: "Add a recurring task template",
@@ -40,6 +41,9 @@ func newRecurAddCmd() *cobra.Command {
 				return err
 			}
 			if err := validateOnMiss(onMiss); err != nil {
+				return err
+			}
+			if _, err := validate.DueOffset(dueIn, time.Now()); err != nil {
 				return err
 			}
 			untilDate, err := validate.FlexDate(until, time.Now())
@@ -64,6 +68,7 @@ func newRecurAddCmd() *cobra.Command {
 				Context: context,
 				OnMiss:  onMiss,
 				Until:   untilDate,
+				DueIn:   strings.TrimSpace(dueIn),
 			}
 			templates = append(templates, r)
 			if err := s.SaveRecurring(templates); err != nil {
@@ -78,6 +83,7 @@ func newRecurAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&context, "context", "", "context tag applied to spawned tasks")
 	cmd.Flags().StringVar(&onMiss, "on-miss", model.OnMissExpire, onMissUsage)
 	cmd.Flags().StringVar(&until, "until", "", dateUsage("last day a task may spawn (default: forever)"))
+	cmd.Flags().StringVar(&dueIn, "due-in", "", dueInUsage("how long after each fire day a task is due (default: due the day it fires)"))
 	registerOnMissFlag(cmd)
 	cmd.MarkFlagRequired("cron")
 	cmd.MarkFlagRequired("aspect")
@@ -86,7 +92,7 @@ func newRecurAddCmd() *cobra.Command {
 }
 
 func newRecurEditCmd() *cobra.Command {
-	var text, cronExpr, context, onMiss, until string
+	var text, cronExpr, context, onMiss, until, dueIn string
 	cmd := &cobra.Command{
 		Use:               "edit <id>",
 		Short:             "Edit a recurring task template",
@@ -106,6 +112,11 @@ func newRecurEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("until") {
 				var err error
 				if until, err = validate.FlexDate(until, time.Now()); err != nil {
+					return err
+				}
+			}
+			if cmd.Flags().Changed("due-in") {
+				if _, err := validate.DueOffset(dueIn, time.Now()); err != nil {
 					return err
 				}
 			}
@@ -137,6 +148,9 @@ func newRecurEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("until") {
 				templates[idx].Until = until
 			}
+			if cmd.Flags().Changed("due-in") {
+				templates[idx].DueIn = strings.TrimSpace(dueIn)
+			}
 			return s.SaveRecurring(templates)
 		},
 	}
@@ -145,6 +159,7 @@ func newRecurEditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&context, "context", "", "new context tag")
 	cmd.Flags().StringVar(&onMiss, "on-miss", "", onMissUsage)
 	cmd.Flags().StringVar(&until, "until", "", dateUsage(`new last day a task may spawn ("--until=" for forever)`))
+	cmd.Flags().StringVar(&dueIn, "due-in", "", dueInUsage(`new offset from fire day to due date ("--due-in=" for due the day it fires)`))
 	registerOnMissFlag(cmd)
 	return cmd
 }
@@ -170,6 +185,9 @@ func newRecurListCmd() *cobra.Command {
 					onMiss = model.OnMissExpire
 				}
 				line := fmt.Sprintf("%s\t%-8s\t%q\t%-7s\t%s", r.ID, r.Aspect, r.Cron, onMiss, r.Text)
+				if r.DueIn != "" {
+					line += "\tdue in " + r.DueIn
+				}
 				if r.Until != "" {
 					line += "\tuntil " + r.Until
 					if recurEnded(r, now) {
@@ -258,6 +276,11 @@ func newRecurRunCmd() *cobra.Command {
 }
 
 const onMissUsage = `what happens to an unfinished instance once its period passes: "expire" (dropped when the next spawns) or "persist" (stays open and overdue until done)`
+
+// dueInUsage is the help text for --due-in, which takes relative forms only.
+func dueInUsage(what string) string {
+	return what + ": 2d/1w/1m or 72h (no fixed dates)"
+}
 
 func validateOnMiss(s string) error {
 	for _, v := range model.ValidOnMiss {
