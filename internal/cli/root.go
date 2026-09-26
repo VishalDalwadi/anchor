@@ -52,8 +52,12 @@ func newRootCmd(args []string) *cobra.Command {
 		// these, cobra would also print it (plus the full usage text) first.
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Also enables `anchor --version`, printing the same line as `anchor version`.
+		Version: versionString(Version, readBuildInfo()),
 	}
+	root.SetVersionTemplate("{{.Version}}\n")
 
+	root.AddCommand(newVersionCmd())
 	root.AddCommand(newTaskCmd())
 	root.AddCommand(newGoalCmd())
 	root.AddCommand(newWatchCmd())
